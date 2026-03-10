@@ -45,7 +45,7 @@ public class TransferenciaService {
         ContaBancariaModel contaOrigem = contaBancariaRepository.findById(dto.getContaOrigem())
                 .orElseThrow(() -> new ContaBancariaNotFoundException("Conta de origem não encontrada"));
 
-        ContaBancariaModel contaDestino = contaBancariaRepository.findById(dto.getContaOrigem())
+        ContaBancariaModel contaDestino = contaBancariaRepository.findById(dto.getContaDestino())
                 .orElseThrow(() -> new ContaBancariaNotFoundException("Conta de destino não encontrada"));
 
         // 3. Validações de negócio (BACEN)
