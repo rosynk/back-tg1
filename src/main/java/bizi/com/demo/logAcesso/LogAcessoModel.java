@@ -26,58 +26,34 @@ public class LogAcessoModel {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_log_acesso")
+    @Column(name = "id_log")
     private Long id;
 
-	@ManyToOne
+    @ManyToOne
     @JoinColumn(name = "id_usuario", nullable = false)
     private UsuarioModel usuario;
 
     @Column(name = "data_hora_acesso", nullable = false)
     private LocalDateTime dataHoraAcesso;
 
-    @Column(name = "ip_origem", nullable = false)
+    @Column(name = "ip_origem", nullable = false, length = 45)
     private String ipOrigem;
 
-    private String acao;
+    @Column(name = "tipo_acao", nullable = false)
+    private String tipoAcao;
 
-    public Long getId() {
-		return id;
-	}
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-	public void setId(Long id) {
-		this.id = id;
-	}
+    public UsuarioModel getUsuario() { return usuario; }
+    public void setUsuario(UsuarioModel usuario) { this.usuario = usuario; }
 
-	public UsuarioModel getUsuario() {
-		return usuario;
-	}
+    public LocalDateTime getDataHoraAcesso() { return dataHoraAcesso; }
+    public void setDataHoraAcesso(LocalDateTime dataHoraAcesso) { this.dataHoraAcesso = dataHoraAcesso; }
 
-	public void setUsuario(UsuarioModel usuario) {
-		this.usuario = usuario;
-	}
+    public String getIpOrigem() { return ipOrigem; }
+    public void setIpOrigem(String ipOrigem) { this.ipOrigem = ipOrigem; }
 
-	public LocalDateTime getDataHoraAcesso() {
-		return dataHoraAcesso;
-	}
-
-	public void setDataHoraAcesso(LocalDateTime dataHoraAcesso) {
-		this.dataHoraAcesso = dataHoraAcesso;
-	}
-
-	public String getIpOrigem() {
-		return ipOrigem;
-	}
-
-	public void setIpOrigem(String ipOrigem) {
-		this.ipOrigem = ipOrigem;
-	}
-
-	public String getAcao() {
-		return acao;
-	}
-
-	public void setAcao(String acao) {
-		this.acao = acao;
-	}
+    public String getTipoAcao() { return tipoAcao; }
+    public void setTipoAcao(String tipoAcao) { this.tipoAcao = tipoAcao; }
 }

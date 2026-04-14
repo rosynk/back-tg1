@@ -20,9 +20,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PixModel {   
+public class PixModel {
 
-	@Id
+    @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_pix")
     private Long id;
@@ -31,30 +31,22 @@ public class PixModel {
     @JoinColumn(name = "id_transacao", nullable = false)
     private TransacaoModel transacao;
 
-    @Column(name = "chave_pix_destino", nullable = false)
-    private String chavePixDestino;
-    
-    public Long getId() {
-		return id;
-	}
+    @Column(name = "conta_destino", nullable = false)
+    private Long contaDestino;
 
-	public void setId(Long id) {
-		this.id = id;
-	}
+    // Chave Pix usada na transação (CPF, e-mail, telefone ou aleatória)
+    @Column(name = "chave_pix", nullable = false)
+    private String chavePix;
 
-	public TransacaoModel getTransacao() {
-		return transacao;
-	}
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-	public void setTransacao(TransacaoModel transacao) {
-		this.transacao = transacao;
-	}
+    public TransacaoModel getTransacao() { return transacao; }
+    public void setTransacao(TransacaoModel transacao) { this.transacao = transacao; }
 
-	public String getChavePixDestino() {
-		return chavePixDestino;
-	}
+    public Long getContaDestino() { return contaDestino; }
+    public void setContaDestino(Long contaDestino) { this.contaDestino = contaDestino; }
 
-	public void setChavePixDestino(String chavePixDestino) {
-		this.chavePixDestino = chavePixDestino;
-	}
+    public String getChavePix() { return chavePix; }
+    public void setChavePix(String chavePix) { this.chavePix = chavePix; }
 }
