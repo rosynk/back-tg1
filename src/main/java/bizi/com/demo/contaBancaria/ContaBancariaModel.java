@@ -9,33 +9,24 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import bizi.com.demo.chavePix.ChavePixModel;
 import bizi.com.demo.transacao.TransacaoModel;
 import bizi.com.demo.usuario.UsuarioModel;
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "conta_bancaria")
-@Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class ContaBancariaModel {
 
-	@Id
+    @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "id_numero_conta")
     private Long id;
+
+    // 🔥 ADICIONADO: O número da conta que o cliente realmente usa
+    @Column(name = "numero_conta", nullable = false, unique = true)
+    private String numeroConta;
 
     @ManyToOne
     @JoinColumn(name = "id_usuario", nullable = false)
@@ -44,14 +35,16 @@ public class ContaBancariaModel {
     @Column(name = "numero_agencia", nullable = false)
     private String numeroAgencia;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "tipo_conta", nullable = false)
-    private String tipoConta;
+    private TipoConta tipoConta;
 
     @Column(name = "status_conta")
     private Boolean statusConta = true;
 
+    // 🔥 AJUSTE: Garante que nunca seja nulo e comece em ZERO
     @Column(nullable = false)
-    private BigDecimal saldo;
+    private BigDecimal saldo = BigDecimal.ZERO;
 
     @Column(name = "data_criacao", nullable = false)
     private LocalDateTime dataCriacao;
@@ -63,77 +56,86 @@ public class ContaBancariaModel {
     @JsonIgnore
     @OneToMany(mappedBy = "contaBancaria", cascade = CascadeType.ALL)
     private List<ChavePixModel> chavesPix;
-    
+
+    // --- GETTERS E SETTERS (Adicione o do numeroConta) ---
+
+    public String getNumeroConta() {
+        return numeroConta;
+    }
+
+    public void setNumeroConta(String numeroConta) {
+        this.numeroConta = numeroConta;
+    }
+
     public Long getId() {
-		return id;
-	}
+        return id;
+    }
 
-	public void setId(Long id) {
-		this.id = id;
-	}
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-	public UsuarioModel getUsuario() {
-		return usuario;
-	}
+    public UsuarioModel getUsuario() {
+        return usuario;
+    }
 
-	public void setUsuario(UsuarioModel usuario) {
-		this.usuario = usuario;
-	}
+    public void setUsuario(UsuarioModel usuario) {
+        this.usuario = usuario;
+    }
 
-	public String getNumeroAgencia() {
-		return numeroAgencia;
-	}
+    public String getNumeroAgencia() {
+        return numeroAgencia;
+    }
 
-	public void setNumeroAgencia(String numeroAgencia) {
-		this.numeroAgencia = numeroAgencia;
-	}
+    public void setNumeroAgencia(String numeroAgencia) {
+        this.numeroAgencia = numeroAgencia;
+    }
 
-	public String getTipoConta() {
-		return tipoConta;
-	}
+    public TipoConta getTipoConta() {
+        return tipoConta;
+    }
 
-	public void setTipoConta(String tipoConta) {
-		this.tipoConta = tipoConta;
-	}
+    public void setTipoConta(TipoConta tipoConta) {
+        this.tipoConta = tipoConta;
+    }
 
-	public Boolean getStatusConta() {
-		return statusConta;
-	}
+    public Boolean getStatusConta() {
+        return statusConta;
+    }
 
-	public void setStatusConta(Boolean statusConta) {
-		this.statusConta = statusConta;
-	}
+    public void setStatusConta(Boolean statusConta) {
+        this.statusConta = statusConta;
+    }
 
-	public BigDecimal getSaldo() {
-		return saldo;
-	}
+    public BigDecimal getSaldo() {
+        return saldo;
+    }
 
-	public void setSaldo(BigDecimal saldo) {
-		this.saldo = saldo;
-	}
+    public void setSaldo(BigDecimal saldo) {
+        this.saldo = saldo;
+    }
 
-	public LocalDateTime getDataCriacao() {
-		return dataCriacao;
-	}
+    public LocalDateTime getDataCriacao() {
+        return dataCriacao;
+    }
 
-	public void setDataCriacao(LocalDateTime dataCriacao) {
-		this.dataCriacao = dataCriacao;
-	}
+    public void setDataCriacao(LocalDateTime dataCriacao) {
+        this.dataCriacao = dataCriacao;
+    }
 
-	public List<TransacaoModel> getTransacoes() {
-		return transacoes;
-	}
+    public List<TransacaoModel> getTransacoes() {
+        return transacoes;
+    }
 
-	public void setTransacoes(List<TransacaoModel> transacoes) {
-		this.transacoes = transacoes;
-	}
+    public void setTransacoes(List<TransacaoModel> transacoes) {
+        this.transacoes = transacoes;
+    }
 
-	public List<ChavePixModel> getChavesPix() {
-		return chavesPix;
-	}
+    public List<ChavePixModel> getChavesPix() {
+        return chavesPix;
+    }
 
-	public void setChavesPix(List<ChavePixModel> chavesPix) {
-		this.chavesPix = chavesPix;
-	}
-    
+    public void setChavesPix(List<ChavePixModel> chavesPix) {
+        this.chavesPix = chavesPix;
+    }
 }

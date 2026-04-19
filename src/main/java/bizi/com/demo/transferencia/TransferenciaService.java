@@ -6,6 +6,8 @@ import java.time.LocalTime;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,6 +16,7 @@ import bizi.com.demo.contaBancaria.ContaBancariaNotFoundException;
 import bizi.com.demo.contaBancaria.ContaBancariaRepository;
 import bizi.com.demo.transacao.TransacaoModel;
 import bizi.com.demo.transacao.TransacaoRepository;
+import bizi.com.demo.transacao.TipoTransacao;
 
 @Service
 public class TransferenciaService {
@@ -27,177 +30,199 @@ public class TransferenciaService {
     @Autowired
     private TransacaoRepository transacaoRepository;
 
-    // Limites do BACEN
     private static final BigDecimal LIMITE_TED_HORARIO = new BigDecimal("5000.00");
     private static final BigDecimal LIMITE_DIARIO = new BigDecimal("10000.00");
     private static final LocalTime HORARIO_INICIO_TED = LocalTime.of(6, 30);
     private static final LocalTime HORARIO_FIM_TED = LocalTime.of(17, 0);
 
+    // --- MÉTODOS DE APOIO ---
+
+    private String getEmailLogado() {
+        return SecurityContextHolder.getContext().getAuthentication().getName();
+    }
+
+    private boolean isUsuarioAdmin() {
+        return SecurityContextHolder.getContext().getAuthentication().getAuthorities()
+                .stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+    }
+
     /**
-     * Realiza uma transferência bancária seguindo regras do BACEN
+     * Trava de segurança: impede que CLIENTE acesse dados de outras contas.
      */
+    private void validarAcessoConta(Long idConta) {
+        if (!isUsuarioAdmin()) {
+            ContaBancariaModel contaLogada = contaBancariaRepository.findByUsuarioEmail(getEmailLogado())
+                    .stream().findFirst()
+                    .orElseThrow(() -> new AccessDeniedException("Usuário não possui conta vinculada."));
+
+            if (!contaLogada.getId().equals(idConta)) {
+                throw new AccessDeniedException("Você não tem permissão para acessar dados de outra conta.");
+            }
+        }
+    }
+
+    // --- LÓGICA PRINCIPAL ---
+
     @Transactional
     public TransferenciaDto realizarTransferencia(TransferenciaDto dto) {
-        // 1. Validações iniciais
-        validarTransferencia(dto);
+        ContaBancariaModel contaOrigem = buscarContaOrigem(dto.getContaOrigem());
 
-        // 2. Buscar contas
-        ContaBancariaModel contaOrigem = contaBancariaRepository.findById(dto.getContaOrigem())
-                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta de origem não encontrada"));
+        ContaBancariaModel contaDestino = contaBancariaRepository
+                .findByNumeroAgenciaAndNumeroConta(dto.getAgenciaDestino(), dto.getNumeroContaDestino())
+                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta de destino inexistente."));
 
-        ContaBancariaModel contaDestino = contaBancariaRepository.findById(dto.getContaOrigem())
-                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta de destino não encontrada"));
-
-        // 3. Validações de negócio (BACEN)
+        validarTransferencia(dto, contaOrigem, contaDestino);
         validarContasAtivas(contaOrigem, contaDestino);
         validarSaldo(contaOrigem, dto.getValor());
         validarLimitesDiarios(contaOrigem.getId(), dto.getValor());
         validarHorarioTED(dto.getValor());
 
-        // 4. Criar transação de débito na conta origem
-        TransacaoModel transacaoDebito = new TransacaoModel();
-        transacaoDebito.setContaBancaria(contaOrigem);
-        transacaoDebito.setTipoTransacao("TRANSFERENCIA");
-        transacaoDebito.setValor(dto.getValor());
-        transacaoDebito.setDataHora(LocalDateTime.now());
-        transacaoDebito = transacaoRepository.save(transacaoDebito);
-
-        // 5. Debitar da conta origem
+        // MOVIMENTAÇÃO
         contaOrigem.setSaldo(contaOrigem.getSaldo().subtract(dto.getValor()));
         contaBancariaRepository.save(contaOrigem);
+        TransacaoModel transacaoSaida = criarTransacao(contaOrigem, TipoTransacao.TRANSFERENCIA_ENVIADA, dto.getValor());
 
-        // 6. Creditar na conta destino
         contaDestino.setSaldo(contaDestino.getSaldo().add(dto.getValor()));
         contaBancariaRepository.save(contaDestino);
+        criarTransacao(contaDestino, TipoTransacao.TRANSFERENCIA_RECEBIDA, dto.getValor());
 
-        // 7. Criar transação de crédito na conta destino
-        TransacaoModel transacaoCredito = new TransacaoModel();
-        transacaoCredito.setContaBancaria(contaDestino);
-        transacaoCredito.setTipoTransacao("DEPOSITO");
-        transacaoCredito.setValor(dto.getValor());
-        transacaoCredito.setDataHora(LocalDateTime.now());
-        transacaoRepository.save(transacaoCredito);
-
-        // 8. Registrar transferência
+        // HISTÓRICO
         TransferenciaModel transferencia = new TransferenciaModel();
-        transferencia.setTransacao(transacaoDebito);
-        transferencia.setContaDestino(dto.getContaDestino());
+        transferencia.setTransacao(transacaoSaida);
+        transferencia.setContaDestino(contaDestino.getId());
         transferencia.setAgenciaDestino(dto.getAgenciaDestino());
         transferencia = transferenciaRepository.save(transferencia);
 
-        // 9. Retornar resposta
-        TransferenciaModel transferenciaModel = new TransferenciaModel();
-        // usuario.setNomeCompleto(usuarioDto.getNomeCompleto());
-        transferenciaModel.setAgenciaDestino(dto.getAgenciaDestino());
-        transferenciaModel.setContaDestino(dto.getContaDestino());
-        transferenciaModel.setId(dto.getIdTransferencia());
-        transferenciaModel.setTransacao(transacaoDebito);
-		return dto;
-        
+        return montarRecibo(dto, transferencia, contaOrigem, contaDestino, transacaoSaida.getDataHora());
     }
 
-    /**
-     * Valida dados básicos da transferência
-     */
-    private void validarTransferencia(TransferenciaDto dto) {
-        if (dto.getContaOrigem().equals(dto.getContaDestino())) {
-            throw new TransferenciaException("Não é possível transferir para a mesma conta");
+    // --- BUSCAS E FILTROS ---
+
+    public List<TransferenciaModel> buscarPorContaOrigem(Long idConta) {
+        validarAcessoConta(idConta);
+        return transferenciaRepository.findByTransacaoContaBancariaId(idConta);
+    }
+
+    public List<TransferenciaModel> buscarPorContaDestino(Long idConta) {
+        validarAcessoConta(idConta);
+        return transferenciaRepository.findByContaDestino(idConta);
+    }
+
+    public List<TransferenciaModel> buscarTodasDaConta(Long idConta) {
+        validarAcessoConta(idConta);
+        return transferenciaRepository.findByContaOrigemOrDestino(idConta);
+    }
+
+    @Transactional(readOnly = true)
+    public byte[] gerarCsvExtrato(Long idConta) {
+        validarAcessoConta(idConta);
+
+        List<TransferenciaModel> transacoes = transferenciaRepository.findByContaOrigemOrDestino(idConta);
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("ID;Data;Valor;Tipo;Destino;Status\n");
+
+        for (TransferenciaModel t : transacoes) {
+            boolean isEnvio = t.getTransacao().getContaBancaria().getId().equals(idConta);
+            
+            csv.append(t.getId()).append(";")
+               .append(t.getTransacao().getDataHora()).append(";")
+               .append(isEnvio ? t.getTransacao().getValor().negate() : t.getTransacao().getValor()).append(";")
+               .append(isEnvio ? "TRANSFERENCIA ENVIADA" : "TRANSFERENCIA RECEBIDA").append(";")
+               .append(t.getContaDestino()).append(";")
+               .append("CONCLUIDA\n");
         }
 
+        return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    // --- AUXILIARES ---
+
+    private ContaBancariaModel buscarContaOrigem(Long idDto) {
+        if (!isUsuarioAdmin()) {
+            return contaBancariaRepository.findByUsuarioEmail(getEmailLogado())
+                    .stream().findFirst()
+                    .orElseThrow(() -> new ContaBancariaNotFoundException("Sua conta de origem não foi encontrada."));
+        }
+        return contaBancariaRepository.findById(idDto)
+                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta de origem não encontrada."));
+    }
+
+    private TransacaoModel criarTransacao(ContaBancariaModel conta, TipoTransacao tipo, BigDecimal valor) {
+        TransacaoModel transacao = new TransacaoModel();
+        transacao.setContaBancaria(conta);
+        transacao.setTipoTransacao(tipo);
+        transacao.setValor(valor);
+        transacao.setDataHora(LocalDateTime.now());
+        return transacaoRepository.save(transacao);
+    }
+
+    private TransferenciaDto montarRecibo(TransferenciaDto dto, TransferenciaModel model, ContaBancariaModel origem, ContaBancariaModel destino, LocalDateTime data) {
+        TransferenciaDto recibo = new TransferenciaDto();
+        recibo.setIdTransferencia(model.getId());
+        recibo.setContaOrigem(origem.getId());
+        recibo.setAgenciaDestino(dto.getAgenciaDestino());
+        recibo.setNumeroContaDestino(dto.getNumeroContaDestino());
+        recibo.setValor(dto.getValor());
+        recibo.setNomeOrigem(origem.getUsuario().getNomeCompleto());
+        recibo.setNomeDestino(destino.getUsuario().getNomeCompleto());
+        recibo.setDataHora(data);
+        recibo.setStatus("CONCLUIDA");
+        recibo.setMensagem("TED enviado com sucesso.");
+        return recibo;
+    }
+
+    // --- VALIDAÇÕES ---
+
+    private void validarTransferencia(TransferenciaDto dto, ContaBancariaModel origem, ContaBancariaModel destino) {
+        if (origem.getId().equals(destino.getId())) {
+            throw new RuntimeException("Não é possível transferir para si mesmo.");
+        }
         if (dto.getValor().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new TransferenciaException("Valor deve ser maior que zero");
+            throw new RuntimeException("O valor deve ser positivo.");
         }
     }
 
-    /**
-     * Valida se as contas estão ativas
-     */
     private void validarContasAtivas(ContaBancariaModel origem, ContaBancariaModel destino) {
-        if (!origem.getStatusConta()) {
-            throw new TransferenciaException("Conta de origem está inativa");
-        }
-        if (!destino.getStatusConta()) {
-            throw new TransferenciaException("Conta de destino está inativa");
+        if (!origem.getStatusConta() || !destino.getStatusConta()) {
+            throw new RuntimeException("Uma das contas está inativa.");
         }
     }
 
-    /**
-     * Valida saldo suficiente (BACEN)
-     */
     private void validarSaldo(ContaBancariaModel conta, BigDecimal valor) {
         if (conta.getSaldo().compareTo(valor) < 0) {
-            throw new TransferenciaException("Saldo insuficiente para realizar a transferência");
+            throw new RuntimeException("Saldo insuficiente.");
         }
     }
 
-    /**
-     * Valida limites diários (simulação de regra BACEN)
-     */
-    private void validarLimitesDiarios(Long idConta, BigDecimal valorTransferencia) {
-        LocalDateTime inicioHoje = LocalDateTime.now().toLocalDate().atStartOfDay();
-        LocalDateTime fimHoje = LocalDateTime.now().toLocalDate().atTime(LocalTime.MAX);
+    private void validarLimitesDiarios(Long idConta, BigDecimal valor) {
+        LocalDateTime inicio = LocalDateTime.now().toLocalDate().atStartOfDay();
+        List<TransacaoModel> historico = transacaoRepository.findByContaBancariaIdAndDataHoraAfter(idConta, inicio);
 
-        List<TransferenciaModel> transferenciasHoje = transferenciaRepository.findByContaOrigem(idConta)
-                .stream()
-                .filter(t -> {
-                    LocalDateTime dataTransf = t.getTransacao().getDataHora();
-                    return dataTransf.isAfter(inicioHoje) && dataTransf.isBefore(fimHoje);
-                })
-                .toList();
-
-        BigDecimal totalHoje = transferenciasHoje.stream()
-                .map(t -> t.getTransacao().getValor())
+        BigDecimal totalHoje = historico.stream()
+                .filter(t -> t.getTipoTransacao() == TipoTransacao.TRANSFERENCIA_ENVIADA)
+                .map(TransacaoModel::getValor)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal novoTotal = totalHoje.add(valorTransferencia);
-
-        if (novoTotal.compareTo(LIMITE_DIARIO) > 0) {
-            throw new TransferenciaException(
-                    String.format("Limite diário de transferências excedido. Limite: R$ %.2f", LIMITE_DIARIO));
+        if (totalHoje.add(valor).compareTo(LIMITE_DIARIO) > 0) {
+            throw new RuntimeException("Limite diário de R$ 10.000,00 excedido.");
         }
     }
 
-    /**
-     * Valida horário para TED (BACEN: 6h30 às 17h em dias úteis)
-     */
     private void validarHorarioTED(BigDecimal valor) {
-        LocalTime agora = LocalTime.now();
-
-        // Se valor > R$ 5.000, valida horário TED
         if (valor.compareTo(LIMITE_TED_HORARIO) > 0) {
+            LocalTime agora = LocalTime.now();
             if (agora.isBefore(HORARIO_INICIO_TED) || agora.isAfter(HORARIO_FIM_TED)) {
-                throw new TransferenciaException(
-                        "Transferências acima de R$ 5.000,00 só podem ser realizadas entre 6h30 e 17h (horário TED)");
+                throw new RuntimeException("TED acima de R$ 5.000 só é permitido em horário comercial (06:30 às 17:00).");
             }
         }
     }
 
-    /**
-     * Busca transferências por conta (enviadas)
-     */
-    public List<TransferenciaModel> buscarPorContaOrigem(Long idConta) {
-        return transferenciaRepository.findByContaOrigem(idConta);
-    }
-
-    /**
-     * Busca transferências por conta (recebidas)
-     */
-    public List<TransferenciaModel> buscarPorContaDestino(Long idConta) {
-        return transferenciaRepository.findByContaDestino(idConta);
-    }
-
-    /**
-     * Busca todas as transferências de uma conta (enviadas e recebidas)
-     */
-    public List<TransferenciaModel> buscarTodasDaConta(Long idConta) {
-        return transferenciaRepository.findByContaOrigemOrDestino(idConta);
-    }
-
-    /**
-     * Busca transferência por ID
-     */
     public TransferenciaModel buscarPorId(Long id) {
-        return transferenciaRepository.findById(id)
-                .orElseThrow(() -> new TransferenciaNotFoundException("Transferência não encontrada"));
+        TransferenciaModel t = transferenciaRepository.findById(id)
+                .orElseThrow(() -> new TransferenciaNotFoundException("Transferência não encontrada."));
+        
+        validarAcessoConta(t.getTransacao().getContaBancaria().getId());
+        return t;
     }
 }

@@ -1,6 +1,7 @@
 package bizi.com.demo.contaBancaria;
 
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -8,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import bizi.com.demo.security.SecurityUtil;
 import bizi.com.demo.usuario.UsuarioModel;
 import bizi.com.demo.usuario.UsuarioNotFoundException;
 import bizi.com.demo.usuario.UsuarioRepository;
@@ -21,98 +23,153 @@ public class ContaBancariaService {
     @Autowired
     private UsuarioRepository usuarioRepository;
 
-    /**
-     * Cria uma nova conta bancária
-     */
+    @Autowired
+    private SecurityUtil securityUtil; 
+
     @Transactional
     public ContaBancariaModel criarConta(ContaBancariaDto dto) {
-        UsuarioModel usuario = usuarioRepository.findById(dto.getIdUsuario())
-                .orElseThrow(() -> new UsuarioNotFoundException("Usuário não encontrado"));
+        UsuarioModel usuario;
+        
+        if (dto.getUsuarioId() != null) {
+            usuario = usuarioRepository.findById(dto.getUsuarioId())
+                .orElseThrow(() -> new UsuarioNotFoundException("Usuário não encontrado."));
+        } else {
+            usuario = securityUtil.getUsuarioLogado();
+        }
 
         ContaBancariaModel conta = new ContaBancariaModel();
         conta.setUsuario(usuario);
-        conta.setNumeroAgencia(dto.getNumeroAgencia());
+        conta.setNumeroAgencia(dto.getNumeroAgencia() != null ? dto.getNumeroAgencia() : "0001");
+        conta.setNumeroConta(gerarNumeroContaUnico());
         conta.setTipoConta(dto.getTipoConta());
         conta.setStatusConta(true);
-        conta.setSaldo(dto.getSaldo() != null ? dto.getSaldo() : BigDecimal.ZERO);
+        conta.setSaldo(BigDecimal.ZERO); 
         conta.setDataCriacao(LocalDateTime.now());
 
         return contaBancariaRepository.save(conta);
     }
 
-    /**
-     * Busca uma conta pelo ID
-     */
-    public ContaBancariaModel buscarPorId(Long id) {
-        return contaBancariaRepository.findById(id)
-                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta não encontrada"));
-    }
+    // --- LOGÍSTICA DE DEPÓSITO ---
 
     /**
-     * Busca contas por usuário
+     * NOVO MÉTODO: Realiza o depósito na conta do usuário que enviou o Token,
+     * sem precisar passar ID no Path da URL.
      */
-    public List<ContaBancariaModel> buscarPorUsuario(Long idUsuario) {
-        return contaBancariaRepository.findByUsuarioId(idUsuario);
+    @Transactional
+    public void realizarAutoDepositoLogado(BigDecimal valor) {
+        validarValorPositivo(valor);
+        
+        // Recupera o ID do usuário através do Token JWT (via SecurityUtil)
+        Long usuarioId = securityUtil.getUsuarioLogado().getId();
+        
+        // Busca a conta vinculada a este usuário
+        // Nota: Pressupõe que findByUsuarioId retorna uma lista, pegamos a primeira ou ajustamos o Repository
+        ContaBancariaModel conta = contaBancariaRepository.findByUsuarioId(usuarioId)
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new RuntimeException("Nenhuma conta encontrada para o seu usuário."));
+
+        conta.setSaldo(conta.getSaldo().add(valor));
+        contaBancariaRepository.save(conta);
     }
 
-    /**
-     * Busca contas por agência
-     */
-    public List<ContaBancariaModel> buscarPorAgencia(String numeroAgencia) {
-        return contaBancariaRepository.findByNumeroAgencia(numeroAgencia);
+    @Transactional
+    public void depositar(Long contaId, BigDecimal valor) {
+        validarValorPositivo(valor);
+        ContaBancariaModel conta = buscarPorId(contaId);
+        conta.setSaldo(conta.getSaldo().add(valor));
+        contaBancariaRepository.save(conta);
     }
 
-    /**
-     * Lista todas as contas
-     */
+    @Transactional
+    public void autoDeposito(Long contaId, BigDecimal valor) {
+        validarValorPositivo(valor);
+        Long usuarioLogadoId = securityUtil.getUsuarioLogado().getId();
+        ContaBancariaModel conta = buscarPorId(contaId);
+        
+        if (!conta.getUsuario().getId().equals(usuarioLogadoId)) {
+            throw new RuntimeException("Você não tem permissão para depositar nesta conta.");
+        }
+
+        conta.setSaldo(conta.getSaldo().add(valor));
+        contaBancariaRepository.save(conta);
+    }
+
+    // --- LOGÍSTICA DE TRANSFERÊNCIA (PIX) ---
+
+    @Transactional
+    public void transferir(Long origemId, Long destinoId, BigDecimal valor) {
+        validarValorPositivo(valor);
+        if (origemId.equals(destinoId)) throw new RuntimeException("Contas iguais.");
+
+        ContaBancariaModel origem = buscarPorId(origemId);
+        ContaBancariaModel destino = buscarPorId(destinoId);
+
+        if (origem.getSaldo().compareTo(valor) < 0) {
+            throw new RuntimeException("Saldo insuficiente.");
+        }
+
+        origem.setSaldo(origem.getSaldo().subtract(valor));
+        destino.setSaldo(destino.getSaldo().add(valor));
+
+        contaBancariaRepository.save(origem);
+        contaBancariaRepository.save(destino);
+    }
+
+    // --- LOGÍSTICA DE TRANSFERÊNCIA (TED) ---
+
+    @Transactional
+    public void transferirViaTed(Long origemId, Long destinoId, BigDecimal valor) {
+        LocalDateTime agora = LocalDateTime.now();
+        DayOfWeek diaDaSemana = agora.getDayOfWeek();
+        int hora = agora.getHour();
+
+        // 1. Regra de Dia Útil
+        if (diaDaSemana == DayOfWeek.SATURDAY || diaDaSemana == DayOfWeek.SUNDAY) {
+            throw new RuntimeException("TED indisponível aos finais de semana. Utilize o Pix para transferências 24h.");
+        }
+
+        // 2. Regra de Horário: 09h às 17h
+        if (hora < 9 || hora >= 17) {
+            throw new RuntimeException("Horário de TED encerrado (disponível apenas das 09h às 17h). Utilize o Pix!");
+        }
+
+        this.transferir(origemId, destinoId, valor);
+    }
+
+    // --- MÉTODOS DE BUSCA E MANUTENÇÃO ---
+
+    @Transactional(readOnly = true)
     public List<ContaBancariaModel> listarTodas() {
         return contaBancariaRepository.findAll();
     }
 
-    /**
-     * Atualiza uma conta bancária
-     */
-    @Transactional
-    public ContaBancariaModel atualizarConta(Long id, ContaBancariaDto dto) {
-        ContaBancariaModel conta = buscarPorId(id);
-
-        if (dto.getIdUsuario() != null && !dto.getIdUsuario().equals(conta.getUsuario().getId())) {
-            UsuarioModel usuario = usuarioRepository.findById(dto.getIdUsuario())
-                    .orElseThrow(() -> new UsuarioNotFoundException("Usuário não encontrado"));
-            conta.setUsuario(usuario);
-        }
-
-        if (dto.getNumeroAgencia() != null) {
-            conta.setNumeroAgencia(dto.getNumeroAgencia());
-        }
-
-        if (dto.getTipoConta() != null) {
-            conta.setTipoConta(dto.getTipoConta());
-        }
-
-        if (dto.getSaldo() != null) {
-            conta.setSaldo(dto.getSaldo());
-        }
-
-        return contaBancariaRepository.save(conta);
+    @Transactional(readOnly = true)
+    public ContaBancariaModel buscarPorId(Long id) {
+        return contaBancariaRepository.findById(id)
+                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta não encontrada."));
     }
 
-    /**
-     * Altera o status da conta
-     */
-    @Transactional
-    public ContaBancariaModel alterarStatus(Long id, Boolean novoStatus) {
-        ContaBancariaModel conta = buscarPorId(id);
-        conta.setStatusConta(novoStatus);
-        return contaBancariaRepository.save(conta);
+    @Transactional(readOnly = true)
+    public List<ContaBancariaModel> buscarMinhasContas() {
+        return contaBancariaRepository.findByUsuarioId(securityUtil.getUsuarioLogado().getId());
     }
 
-    /**
-     * Deleta uma conta
-     */
     @Transactional
     public void deletarConta(Long id) {
-        ContaBancariaModel conta = buscarPorId(id);
-        contaBancariaRepository.delete(conta);
+        if (!contaBancariaRepository.existsById(id)) throw new ContaBancariaNotFoundException("Inexistente.");
+        contaBancariaRepository.deleteById(id);
+    }
+
+    // --- AUXILIARES ---
+
+    private void validarValorPositivo(BigDecimal valor) {
+        if (valor == null || valor.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new RuntimeException("O valor deve ser maior que zero.");
+        }
+    }
+
+    private String gerarNumeroContaUnico() {
+        return String.valueOf((int) (Math.random() * 900000) + 100000); 
     }
 }

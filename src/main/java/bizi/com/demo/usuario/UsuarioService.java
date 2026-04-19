@@ -2,7 +2,6 @@ package bizi.com.demo.usuario;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -11,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import bizi.com.demo.endereco.EnderecoModel;
 import bizi.com.demo.endereco.EnderecoRepository;
+import bizi.com.demo.security.SecurityUtil;
 
 @Service
 @Transactional
@@ -18,72 +18,99 @@ public class UsuarioService {
 
     @Autowired
     private UsuarioRepository usuarioRepository;
-    
+
     @Autowired
     private EnderecoRepository enderecoRepository;
-    
+
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private SecurityUtil securityUtil;
+
     /**
-     * Cria um novo usuário
-     * @param usuarioDto Dados do usuário
-     * @return UsuarioModel criado
+     * Busca um usuário pelo ID
+     */
+    @Transactional(readOnly = true)
+    public UsuarioModel buscarPorId(Long id) {
+        return usuarioRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado com ID: " + id));
+    }
+
+    /**
+     * MÉTODO ÚNICO: Cria um novo usuário com regras de Role e Hierarquia
+     */
+    /**
+     * MÉTODO ÚNICO: Cria um novo usuário com regras de Role e Hierarquia
      */
     public UsuarioModel criarUsuario(UsuarioDto usuarioDto) {
-        // Validar se CPF já existe
+        
+        // 1. Validações de duplicidade
         if (usuarioRepository.existsByCpf(usuarioDto.getCpf())) {
-            throw new UsuarioConflictException("CPF já cadastrado: " + usuarioDto.getCpf());
+            throw new RuntimeException("CPF já cadastrado!");
         }
-        
-        // Validar se email já existe (se fornecido)
-        if (usuarioDto.getEmail() != null && !usuarioDto.getEmail().isEmpty() 
-            && usuarioRepository.existsByEmail(usuarioDto.getEmail())) {
-            throw new UsuarioConflictException("Email já cadastrado: " + usuarioDto.getEmail());
+
+        // 2. Lógica de Hierarquia e Roles
+        Role roleSolicitado = usuarioDto.getRole();
+        UsuarioModel responsavel = null;
+
+        try {
+            // Tenta pegar quem está logado para validar permissões
+            Role roleLogado = securityUtil.getRoleUsuarioLogado();
+
+            // Bloqueio: Cliente comum não pode criar Admin
+            if (roleLogado == Role.ROLE_CLIENTE && roleSolicitado == Role.ROLE_ADMIN) {
+                throw new RuntimeException("Clientes não possuem permissão para criar administradores!");
+            }
+            
+            // Se um responsavelId foi enviado (caso do filho), buscamos o pai no banco
+            if (usuarioDto.getResponsavelId() != null) {
+                responsavel = usuarioRepository.findById(usuarioDto.getResponsavelId())
+                        .orElseThrow(() -> new RuntimeException("Responsável não encontrado"));
+            }
+
+        } catch (Exception e) {
+            // Caso de AUTO-CADASTRO (Ninguém logado no sistema ainda)
+            // Aqui mudei de ROLE_USER para ROLE_CLIENTE para bater com seu Enum!
+            if (roleSolicitado == null) roleSolicitado = Role.ROLE_CLIENTE; 
         }
-        
-        // IMPORTANTE: Salvar o endereço PRIMEIRO
-        EnderecoModel endereco = enderecoRepository.save(usuarioDto.getEndereco());
-        
-        // Criar o usuário com o endereço salvo
+
+        // 3. Persistência do Endereço
+        EnderecoModel endereco = null;
+        if (usuarioDto.getEndereco() != null) {
+            endereco = enderecoRepository.save(usuarioDto.getEndereco());
+        }
+
+        // 4. Mapeamento para a Model
         UsuarioModel usuario = new UsuarioModel();
         usuario.setNomeCompleto(usuarioDto.getNomeCompleto());
         usuario.setCpf(usuarioDto.getCpf());
-        usuario.setEndereco(endereco);  // Usar o endereço com ID
+        usuario.setEndereco(endereco);
         usuario.setEmail(usuarioDto.getEmail());
         usuario.setTelefone(usuarioDto.getTelefone());
         usuario.setSenha(passwordEncoder.encode(usuarioDto.getSenha()));
         usuario.setDataCadastro(LocalDateTime.now());
-        usuario.setTipoUsuario(usuarioDto.getTipoUsuario());
+        usuario.setRole(roleSolicitado);
+        
+        // Vincula o Pai/Responsável se houver
+        if (responsavel != null) {
+            usuario.setResponsavel(responsavel);
+        }
 
         return usuarioRepository.save(usuario);
     }
 
     /**
      * Busca um usuário pelo CPF
-     * @param cpf CPF do usuário
-     * @return UsuarioModel se encontrado
      */
     @Transactional(readOnly = true)
     public UsuarioModel buscarPorCpf(String cpf) {
         return usuarioRepository.findByCpf(cpf)
-                .orElseThrow(() -> new UsuarioNotFoundException("Usuário não encontrado com CPF: " + cpf));
-    }
-
-    /**
-     * Busca um usuário pelo ID
-     * @param id ID do usuário
-     * @return UsuarioModel se encontrado
-     */
-    @Transactional(readOnly = true)
-    public UsuarioModel buscarPorId(Long id) {
-        return usuarioRepository.findById(id)
-                .orElseThrow(() -> new UsuarioNotFoundException("Usuário não encontrado com ID: " + id));
+                .orElseThrow(() -> new RuntimeException("Usuário não encontrado com CPF: " + cpf));
     }
 
     /**
      * Lista todos os usuários
-     * @return Lista de usuários
      */
     @Transactional(readOnly = true)
     public List<UsuarioModel> listarTodos() {
@@ -92,41 +119,31 @@ public class UsuarioService {
 
     /**
      * Atualiza um usuário existente
-     * @param id ID do usuário
-     * @param usuarioDto Dados atualizados
-     * @return UsuarioModel atualizado
      */
     public UsuarioModel atualizarUsuario(Long id, UsuarioDto usuarioDto) {
         UsuarioModel usuarioExistente = buscarPorId(id);
         
-        // Validar se CPF já existe em outro usuário
-        if (!usuarioExistente.getCpf().equals(usuarioDto.getCpf()) 
+        // Validar se o novo CPF já pertence a outra pessoa
+        if (usuarioDto.getCpf() != null && !usuarioExistente.getCpf().equals(usuarioDto.getCpf()) 
             && usuarioRepository.existsByCpf(usuarioDto.getCpf())) {
-            throw new UsuarioConflictException("CPF já cadastrado: " + usuarioDto.getCpf());
-        }
-        
-        // Validar se email já existe em outro usuário (se fornecido)
-        if (usuarioDto.getEmail() != null && !usuarioDto.getEmail().isEmpty()) {
-            Optional<UsuarioModel> usuarioComEmail = usuarioRepository.findByEmail(usuarioDto.getEmail());
-            if (usuarioComEmail.isPresent() && !usuarioComEmail.get().getId().equals(id)) {
-                throw new UsuarioConflictException("Email já cadastrado: " + usuarioDto.getEmail());
-            }
+            throw new RuntimeException("CPF já cadastrado em outro usuário");
         }
         
         // Atualizar endereço se fornecido
         if (usuarioDto.getEndereco() != null) {
-            EnderecoModel enderecoAtualizado = enderecoRepository.save(usuarioDto.getEndereco());
-            usuarioExistente.setEndereco(enderecoAtualizado);
+            EnderecoModel enderecoSalvo = enderecoRepository.save(usuarioDto.getEndereco());
+            usuarioExistente.setEndereco(enderecoSalvo);
         }
         
-        // Atualizar campos
-        usuarioExistente.setNomeCompleto(usuarioDto.getNomeCompleto());
-        usuarioExistente.setCpf(usuarioDto.getCpf());
-        usuarioExistente.setEmail(usuarioDto.getEmail());
-        usuarioExistente.setTelefone(usuarioDto.getTelefone());
-        usuarioExistente.setTipoUsuario(usuarioDto.getTipoUsuario());
+        if (usuarioDto.getNomeCompleto() != null) usuarioExistente.setNomeCompleto(usuarioDto.getNomeCompleto());
+        if (usuarioDto.getCpf() != null) usuarioExistente.setCpf(usuarioDto.getCpf());
+        if (usuarioDto.getEmail() != null) usuarioExistente.setEmail(usuarioDto.getEmail());
+        if (usuarioDto.getTelefone() != null) usuarioExistente.setTelefone(usuarioDto.getTelefone());
         
-        // Atualizar senha apenas se fornecida
+        if (usuarioDto.getRole() != null) {
+            usuarioExistente.setRole(usuarioDto.getRole());
+        }
+        
         if (usuarioDto.getSenha() != null && !usuarioDto.getSenha().isEmpty()) {
             usuarioExistente.setSenha(passwordEncoder.encode(usuarioDto.getSenha()));
         }
@@ -135,19 +152,17 @@ public class UsuarioService {
     }
 
     /**
-     * Deleta um usuário
-     * @param id ID do usuário
+     * Deleta um usuário por ID
      */
     public void deletarUsuario(Long id) {
         if (!usuarioRepository.existsById(id)) {
-            throw new UsuarioNotFoundException("Usuário não encontrado com ID: " + id);
+            throw new RuntimeException("Usuário não encontrado com ID: " + id);
         }
         usuarioRepository.deleteById(id);
     }
 
     /**
      * Deleta um usuário pelo CPF
-     * @param cpf CPF do usuário
      */
     public void deletarUsuarioPorCpf(String cpf) {
         UsuarioModel usuario = buscarPorCpf(cpf);

@@ -15,10 +15,8 @@ import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "pagamento_boleto")
-@Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class PagamentoBoletoModel {
 
 	@Id

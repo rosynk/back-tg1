@@ -4,25 +4,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import bizi.com.demo.contaBancaria.ContaBancariaModel;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "transacao")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 public class TransacaoModel {
 
     @Id
@@ -30,58 +15,71 @@ public class TransacaoModel {
     @Column(name = "id_transacao")
     private Long id;
 
-	@ManyToOne
+    @ManyToOne
     @JoinColumn(name = "id_numero_conta", nullable = false)
     private ContaBancariaModel contaBancaria;
-
-    @Column(name = "tipo_transacao", nullable = false)
-    private String tipoTransacao;
 
     @Column(nullable = false)
     private BigDecimal valor;
 
     @Column(name = "data_hora", nullable = false)
     private LocalDateTime dataHora;
-    
+
+    @Enumerated(EnumType.STRING) 
+    @Column(name = "tipo_transacao", nullable = false)
+    private TipoTransacao tipoTransacao; // Agora tipado como Enum
+
+    // Construtores
+    public TransacaoModel() {}
+
+    public TransacaoModel(Long id, ContaBancariaModel contaBancaria, BigDecimal valor, LocalDateTime dataHora, TipoTransacao tipoTransacao) {
+        this.id = id;
+        this.contaBancaria = contaBancaria;
+        this.valor = valor;
+        this.dataHora = dataHora;
+        this.tipoTransacao = tipoTransacao;
+    }
+
+    // --- Getters e Setters Corrigidos ---
+
     public Long getId() {
-		return id;
-	}
+        return id;
+    }
 
-	public void setId(Long id) {
-		this.id = id;
-	}
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-	public ContaBancariaModel getContaBancaria() {
-		return contaBancaria;
-	}
+    public ContaBancariaModel getContaBancaria() {
+        return contaBancaria;
+    }
 
-	public void setContaBancaria(ContaBancariaModel contaBancaria) {
-		this.contaBancaria = contaBancaria;
-	}
+    public void setContaBancaria(ContaBancariaModel contaBancaria) {
+        this.contaBancaria = contaBancaria;
+    }
 
-	public String getTipoTransacao() {
-		return tipoTransacao;
-	}
+    public BigDecimal getValor() {
+        return valor;
+    }
 
-	public void setTipoTransacao(String tipoTransacao) {
-		this.tipoTransacao = tipoTransacao;
-	}
+    public void setValor(BigDecimal valor) {
+        this.valor = valor;
+    }
 
-	public BigDecimal getValor() {
-		return valor;
-	}
+    public LocalDateTime getDataHora() {
+        return dataHora;
+    }
 
-	public void setValor(BigDecimal valor) {
-		this.valor = valor;
-	}
+    public void setDataHora(LocalDateTime dataHora) {
+        this.dataHora = dataHora;
+    }
 
-	public LocalDateTime getDataHora() {
-		return dataHora;
-	}
+    // Unificamos para receber e retornar apenas o objeto TipoTransacao
+    public TipoTransacao getTipoTransacao() {
+        return tipoTransacao;
+    }
 
-	public void setDataHora(LocalDateTime dataHora) {
-		this.dataHora = dataHora;
-	}
-
+    public void setTipoTransacao(TipoTransacao tipoTransacao) {
+        this.tipoTransacao = tipoTransacao;
+    }
 }
-

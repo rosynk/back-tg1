@@ -1,18 +1,10 @@
 package bizi.com.demo.usuario;
 
 import java.util.List;
-
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -23,31 +15,33 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/usuarios")
-@Tag(name = "Usuário", description = "Endpoints para gerenciamento de usuários")
+@Tag(name = "Usuário", description = "Endpoints para gerenciamento interno de usuários")
 public class UsuarioController {
 
-    @Autowired
-    private UsuarioService usuarioService;
+    private final UsuarioService usuarioService;
+
+    public UsuarioController(UsuarioService usuarioService) {
+        this.usuarioService = usuarioService;
+    }
 
     /**
-     * Cria um novo usuário
+     * Criar usuário
+     * Nota: Para novos clientes deslogados, usar o PropostaController.
      */
     @PostMapping
-    @Operation(summary = "Criar usuário", description = "Cadastra um novo usuário no sistema")
+    @Operation(summary = "Criar usuário", description = "Cadastra um novo usuário. Se feito por um Admin, permite definir Roles.")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "201", description = "Usuário criado com sucesso"),
-        @ApiResponse(responseCode = "400", description = "Dados inválidos ou CPF/Email já cadastrado"),
+        @ApiResponse(responseCode = "400", description = "Dados inválidos ou duplicados"),
+        @ApiResponse(responseCode = "403", description = "Sem permissão (Hierarquia de Roles)"),
         @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
     })
-    public ResponseEntity<UsuarioModel> criarUsuario(
-            @Valid @RequestBody UsuarioDto usuarioDto) {
+    public ResponseEntity<?> criarUsuario(@Valid @RequestBody UsuarioDto usuarioDto) {
         try {
             UsuarioModel usuario = usuarioService.criarUsuario(usuarioDto);
             return ResponseEntity.status(HttpStatus.CREATED).body(usuario);
-        } catch (UsuarioConflictException e) {
-            return ResponseEntity.badRequest().build();
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(new ErrorMessage(e.getMessage()));
         }
     }
 
@@ -55,77 +49,63 @@ public class UsuarioController {
      * Busca um usuário pelo CPF
      */
     @GetMapping("/cpf/{cpf}")
-    @Operation(summary = "Buscar usuário por CPF", description = "Retorna os dados do usuário pelo CPF")
+    @PreAuthorize("hasAnyRole('ADMIN', 'CLIENTE', 'FILHO')")
+    @Operation(summary = "Buscar por CPF", description = "Retorna os dados do usuário pelo CPF")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Usuário encontrado"),
         @ApiResponse(responseCode = "404", description = "Usuário não encontrado"),
-        @ApiResponse(responseCode = "400", description = "CPF inválido")
+        @ApiResponse(responseCode = "403", description = "Sem permissão")
     })
     public ResponseEntity<UsuarioModel> buscarPorCpf(
             @Parameter(description = "CPF do usuário (apenas números)")
             @PathVariable String cpf) {
-        try {
-            UsuarioModel usuario = usuarioService.buscarPorCpf(cpf);
-            return ResponseEntity.ok(usuario);
-        } catch (UsuarioNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        }
+        return ResponseEntity.ok(usuarioService.buscarPorCpf(cpf));
     }
 
     /**
      * Busca um usuário pelo ID
      */
     @GetMapping("/{id}")
-    @Operation(summary = "Buscar usuário por ID", description = "Retorna os dados do usuário pelo ID")
+    @PreAuthorize("hasAnyRole('ADMIN', 'CLIENTE', 'FILHO')")
+    @Operation(summary = "Buscar por ID")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Usuário encontrado"),
         @ApiResponse(responseCode = "404", description = "Usuário não encontrado")
     })
-    public ResponseEntity<UsuarioModel> buscarPorId(
-            @Parameter(description = "ID do usuário")
-            @PathVariable Long id) {
-        try {
-            UsuarioModel usuario = usuarioService.buscarPorId(id);
-            return ResponseEntity.ok(usuario);
-        } catch (UsuarioNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        }
+    public ResponseEntity<UsuarioModel> buscarPorId(@PathVariable Long id) {
+        return ResponseEntity.ok(usuarioService.buscarPorId(id));
     }
 
     /**
      * Lista todos os usuários
      */
     @GetMapping
-    @Operation(summary = "Listar usuários", description = "Retorna uma lista com todos os usuários cadastrados")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Listar todos", description = "Retorna todos os usuários (Acesso restrito ao Administrador)")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Lista de usuários retornada com sucesso")
+        @ApiResponse(responseCode = "200", description = "Lista retornada com sucesso"),
+        @ApiResponse(responseCode = "403", description = "Acesso negado: Requer ROLE_ADMIN")
     })
     public ResponseEntity<List<UsuarioModel>> listarTodos() {
-        List<UsuarioModel> usuarios = usuarioService.listarTodos();
-        return ResponseEntity.ok(usuarios);
+        return ResponseEntity.ok(usuarioService.listarTodos());
     }
 
     /**
      * Atualiza um usuário
      */
     @PutMapping("/{id}")
-    @Operation(summary = "Atualizar usuário", description = "Atualiza os dados de um usuário existente")
+    @PreAuthorize("hasRole('ADMIN') or #id == authentication.principal.id")
+    @Operation(summary = "Atualizar usuário", description = "Atualiza os dados. Admin pode tudo; Cliente só o próprio perfil.")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Usuário atualizado com sucesso"),
-        @ApiResponse(responseCode = "404", description = "Usuário não encontrado"),
-        @ApiResponse(responseCode = "400", description = "Dados inválidos ou CPF/Email já cadastrado")
+        @ApiResponse(responseCode = "200", description = "Usuário atualizado"),
+        @ApiResponse(responseCode = "400", description = "Erro na atualização"),
+        @ApiResponse(responseCode = "403", description = "Sem permissão")
     })
-    public ResponseEntity<UsuarioModel> atualizarUsuario(
-            @Parameter(description = "ID do usuário")
-            @PathVariable Long id,
-            @Valid @RequestBody UsuarioDto usuarioDto) {
+    public ResponseEntity<?> atualizarUsuario(@PathVariable Long id, @Valid @RequestBody UsuarioDto usuarioDto) {
         try {
-            UsuarioModel usuario = usuarioService.atualizarUsuario(id, usuarioDto);
-            return ResponseEntity.ok(usuario);
-        } catch (UsuarioNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (UsuarioConflictException e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.ok(usuarioService.atualizarUsuario(id, usuarioDto));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(new ErrorMessage(e.getMessage()));
         }
     }
 
@@ -133,39 +113,33 @@ public class UsuarioController {
      * Deleta um usuário pelo ID
      */
     @DeleteMapping("/{id}")
-    @Operation(summary = "Deletar usuário por ID", description = "Remove um usuário do sistema pelo ID")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Deletar por ID")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "204", description = "Usuário deletado com sucesso"),
-        @ApiResponse(responseCode = "404", description = "Usuário não encontrado")
+        @ApiResponse(responseCode = "204", description = "Deletado com sucesso"),
+        @ApiResponse(responseCode = "403", description = "Somente ADMIN pode deletar")
     })
-    public ResponseEntity<Void> deletarUsuario(
-            @Parameter(description = "ID do usuário")
-            @PathVariable Long id) {
-        try {
-            usuarioService.deletarUsuario(id);
-            return ResponseEntity.noContent().build();
-        } catch (UsuarioNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        }
+    public ResponseEntity<Void> deletarUsuario(@PathVariable Long id) {
+        usuarioService.deletarUsuario(id);
+        return ResponseEntity.noContent().build();
     }
 
     /**
      * Deleta um usuário pelo CPF
      */
     @DeleteMapping("/cpf/{cpf}")
-    @Operation(summary = "Deletar usuário por CPF", description = "Remove um usuário do sistema pelo CPF")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "204", description = "Usuário deletado com sucesso"),
-        @ApiResponse(responseCode = "404", description = "Usuário não encontrado")
-    })
-    public ResponseEntity<Void> deletarUsuarioPorCpf(
-            @Parameter(description = "CPF do usuário (apenas números)")
-            @PathVariable String cpf) {
-        try {
-            usuarioService.deletarUsuarioPorCpf(cpf);
-            return ResponseEntity.noContent().build();
-        } catch (UsuarioNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        }
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Deletar por CPF")
+    public ResponseEntity<Void> deletarUsuarioPorCpf(@PathVariable String cpf) {
+        usuarioService.deletarUsuarioPorCpf(cpf);
+        return ResponseEntity.noContent().build();
+    }
+
+    // Classe auxiliar para manter as respostas de erro padronizadas para o Front
+    public static class ErrorMessage {
+        private String message;
+        public ErrorMessage(String message) { this.message = message; }
+        public String getMessage() { return message; }
+        public void setMessage(String message) { this.message = message; }
     }
 }

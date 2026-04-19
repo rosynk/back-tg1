@@ -1,21 +1,14 @@
 package bizi.com.demo.contaBancaria;
 
+import java.math.BigDecimal;
 import java.util.List;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,155 +22,114 @@ public class ContaBancariaController {
     @Autowired
     private ContaBancariaService contaBancariaService;
 
-    /**
-     * Cria uma nova conta bancária
-     */
     @PostMapping
-    @Operation(summary = "Criar conta bancária", description = "Cadastra uma nova conta bancária no sistema")
-    @ApiResponses(value = {
+    @Operation(summary = "Criar conta bancária", description = "Cadastra uma nova conta. Geralmente invocado pelo processo de onboarding.")
+    @ApiResponses({
         @ApiResponse(responseCode = "201", description = "Conta criada com sucesso"),
-        @ApiResponse(responseCode = "400", description = "Dados inválidos ou usuário não encontrado"),
-        @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
+        @ApiResponse(responseCode = "400", description = "Dados inválidos ou CPF já cadastrado")
     })
-    public ResponseEntity<ContaBancariaModel> criarConta(
-            @Valid @RequestBody ContaBancariaDto contaBancariaDto) {
+    public ResponseEntity<?> criarConta(@Valid @RequestBody ContaBancariaDto contaBancariaDto) {
         try {
             ContaBancariaModel conta = contaBancariaService.criarConta(contaBancariaDto);
             return ResponseEntity.status(HttpStatus.CREATED).body(conta);
-        } catch (ContaBancariaConflictException e) {
-            return ResponseEntity.badRequest().build();
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
         }
     }
 
-    /**
-     * Busca uma conta pelo ID
-     */
+    @GetMapping("/minhas-contas")
+    @Operation(summary = "Listar minhas contas", description = "Retorna as contas vinculadas ao usuário logado via Token JWT.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Contas listadas com sucesso"),
+        @ApiResponse(responseCode = "401", description = "Usuário não autenticado")
+    })
+    public ResponseEntity<List<ContaBancariaModel>> buscarMinhasContas() {
+        return ResponseEntity.ok(contaBancariaService.buscarMinhasContas());
+    }
+
+    @PatchMapping("/meu-deposito")
+    @Operation(summary = "Auto-Depósito (Cliente)", description = "Injeta saldo na própria conta sem necessidade de informar ID na URL.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Depósito realizado com sucesso"),
+        @ApiResponse(responseCode = "400", description = "Valor inválido"),
+        @ApiResponse(responseCode = "404", description = "Conta não encontrada para o usuário logado")
+    })
+    public ResponseEntity<?> autoDepositoSemId(@RequestBody BigDecimal valor) {
+        try {
+            contaBancariaService.realizarAutoDepositoLogado(valor);
+            return ResponseEntity.ok(new ErrorResponse("Depósito de R$ " + valor + " realizado com sucesso."));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
     @GetMapping("/{id}")
-    @Operation(summary = "Buscar conta por ID", description = "Retorna os dados da conta pelo ID")
-    @ApiResponses(value = {
+    @PreAuthorize("hasAnyRole('ADMIN', 'CLIENTE')")
+    @Operation(summary = "Buscar conta por ID", description = "Retorna detalhes de uma conta. Clientes só podem ver a própria conta.")
+    @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Conta encontrada"),
+        @ApiResponse(responseCode = "403", description = "Acesso negado"),
         @ApiResponse(responseCode = "404", description = "Conta não encontrada")
     })
-    public ResponseEntity<ContaBancariaModel> buscarPorId(
-            @Parameter(description = "ID da conta")
-            @PathVariable Long id) {
+    public ResponseEntity<?> buscarPorId(@PathVariable Long id) {
         try {
-            ContaBancariaModel conta = contaBancariaService.buscarPorId(id);
-            return ResponseEntity.ok(conta);
-        } catch (ContaBancariaNotFoundException e) {
-            return ResponseEntity.notFound().build();
+            return ResponseEntity.ok(contaBancariaService.buscarPorId(id));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse("Conta não encontrada."));
         }
     }
 
-    /**
-     * Busca contas por usuário
-     */
-    @GetMapping("/usuario/{idUsuario}")
-    @Operation(summary = "Buscar contas por usuário", description = "Retorna todas as contas de um usuário")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Contas encontradas"),
-        @ApiResponse(responseCode = "404", description = "Usuário não encontrado")
-    })
-    public ResponseEntity<List<ContaBancariaModel>> buscarPorUsuario(
-            @Parameter(description = "ID do usuário")
-            @PathVariable Long idUsuario) {
-        List<ContaBancariaModel> contas = contaBancariaService.buscarPorUsuario(idUsuario);
-        return ResponseEntity.ok(contas);
-    }
+    // ==========================================
+    // ENDPOINTS EXCLUSIVOS PARA ADMINISTRADORES
+    // ==========================================
 
-    /**
-     * Busca uma conta por agência
-     */
-    @GetMapping("/agencia/{numeroAgencia}")
-    @Operation(summary = "Buscar contas por agência", description = "Retorna todas as contas de uma agência")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Contas encontradas")
-    })
-    public ResponseEntity<List<ContaBancariaModel>> buscarPorAgencia(
-            @Parameter(description = "Número da agência")
-            @PathVariable String numeroAgencia) {
-        List<ContaBancariaModel> contas = contaBancariaService.buscarPorAgencia(numeroAgencia);
-        return ResponseEntity.ok(contas);
-    }
-
-    /**
-     * Lista todas as contas
-     */
     @GetMapping
-    @Operation(summary = "Listar contas", description = "Retorna uma lista com todas as contas cadastradas")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Lista de contas retornada com sucesso")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Listar todas as contas (ADMIN)", description = "Visualização global de todas as contas do banco. Requer ROLE_ADMIN.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Lista retornada com sucesso"),
+        @ApiResponse(responseCode = "403", description = "Acesso restrito a administradores")
     })
     public ResponseEntity<List<ContaBancariaModel>> listarTodas() {
-        List<ContaBancariaModel> contas = contaBancariaService.listarTodas();
-        return ResponseEntity.ok(contas);
+        return ResponseEntity.ok(contaBancariaService.listarTodas());
     }
 
-    /**
-     * Atualiza uma conta
-     */
-    @PutMapping("/{id}")
-    @Operation(summary = "Atualizar conta", description = "Atualiza os dados de uma conta existente")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Conta atualizada com sucesso"),
-        @ApiResponse(responseCode = "404", description = "Conta não encontrada"),
-        @ApiResponse(responseCode = "400", description = "Dados inválidos")
+    @PatchMapping("/{id}/deposito-administrativo")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Depósito via Admin", description = "Permite que o administrador injete saldo em qualquer conta pelo ID.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Crédito realizado com sucesso"),
+        @ApiResponse(responseCode = "400", description = "Valor inválido"),
+        @ApiResponse(responseCode = "404", description = "Conta destino não encontrada")
     })
-    public ResponseEntity<ContaBancariaModel> atualizarConta(
-            @Parameter(description = "ID da conta")
-            @PathVariable Long id,
-            @Valid @RequestBody ContaBancariaDto contaBancariaDto) {
+    public ResponseEntity<?> depositoAdmin(@PathVariable Long id, @RequestBody BigDecimal valor) {
         try {
-            ContaBancariaModel conta = contaBancariaService.atualizarConta(id, contaBancariaDto);
-            return ResponseEntity.ok(conta);
-        } catch (ContaBancariaNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        } catch (ContaBancariaConflictException e) {
-            return ResponseEntity.badRequest().build();
+            contaBancariaService.depositar(id, valor);
+            return ResponseEntity.ok(new ErrorResponse("Depósito administrativo de R$ " + valor + " realizado."));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
         }
     }
 
-    /**
-     * Ativa ou desativa uma conta
-     */
-    @PutMapping("/{id}/status")
-    @Operation(summary = "Alterar status da conta", description = "Ativa ou desativa uma conta bancária")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Status alterado com sucesso"),
-        @ApiResponse(responseCode = "404", description = "Conta não encontrada")
-    })
-    public ResponseEntity<ContaBancariaModel> alterarStatus(
-            @Parameter(description = "ID da conta")
-            @PathVariable Long id,
-            @Parameter(description = "Novo status (true = ativa, false = inativa)")
-            @RequestBody Boolean novoStatus) {
-        try {
-            ContaBancariaModel conta = contaBancariaService.alterarStatus(id, novoStatus);
-            return ResponseEntity.ok(conta);
-        } catch (ContaBancariaNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        }
-    }
-
-    /**
-     * Deleta uma conta pelo ID
-     */
     @DeleteMapping("/{id}")
-    @Operation(summary = "Deletar conta por ID", description = "Remove uma conta do sistema pelo ID")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "204", description = "Conta deletada com sucesso"),
-        @ApiResponse(responseCode = "404", description = "Conta não encontrada")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Deletar conta (ADMIN)", description = "Remove uma conta permanentemente do sistema.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Conta excluída com sucesso"),
+        @ApiResponse(responseCode = "404", description = "Conta não encontrada para exclusão")
     })
-    public ResponseEntity<Void> deletarConta(
-            @Parameter(description = "ID da conta")
-            @PathVariable Long id) {
+    public ResponseEntity<Void> deletarConta(@PathVariable Long id) {
         try {
             contaBancariaService.deletarConta(id);
             return ResponseEntity.noContent().build();
-        } catch (ContaBancariaNotFoundException e) {
+        } catch (Exception e) {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    static class ErrorResponse {
+        private String mensagem;
+        public ErrorResponse(String mensagem) { this.mensagem = mensagem; }
+        public String getMensagem() { return mensagem; }
     }
 }

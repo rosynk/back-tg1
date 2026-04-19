@@ -16,10 +16,8 @@ import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "transferencia")
-@Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class TransferenciaModel {
 
     @Id

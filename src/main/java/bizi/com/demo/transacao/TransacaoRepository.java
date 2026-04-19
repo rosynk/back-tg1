@@ -11,9 +11,9 @@ public interface TransacaoRepository extends JpaRepository<TransacaoModel, Long>
     
     List<TransacaoModel> findByContaBancariaId(Long idConta);
  
-    List<TransacaoModel> findByTipoTransacao(String tipoTransacao);
+    List<TransacaoModel> findByTipoTransacao(TipoTransacao tipoTransacao); // Use o Enum se TipoTransacao for um Enum
     
-    List<TransacaoModel> findByContaBancariaIdAndTipoTransacao(Long idConta, String tipoTransacao);
+    List<TransacaoModel> findByContaBancariaIdAndTipoTransacao(Long idConta, TipoTransacao tipoTransacao);
 
     List<TransacaoModel> findByDataHoraBetween(LocalDateTime dataInicio, LocalDateTime dataFim);
 
@@ -21,4 +21,8 @@ public interface TransacaoRepository extends JpaRepository<TransacaoModel, Long>
         Long idConta, LocalDateTime dataInicio, LocalDateTime dataFim);
 
     List<TransacaoModel> findByContaBancariaIdOrderByDataHoraDesc(Long idConta);
+
+    // CORRIGIDO: O retorno deve ser List<TransacaoModel>
+    // O Spring agora vai conseguir mapear corretamente para o seu banco
+    List<TransacaoModel> findByContaBancariaIdAndDataHoraAfter(Long idConta, LocalDateTime data);
 }

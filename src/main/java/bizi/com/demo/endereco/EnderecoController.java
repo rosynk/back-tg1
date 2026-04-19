@@ -1,19 +1,12 @@
 package bizi.com.demo.endereco;
 
 import java.util.List;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,184 +17,114 @@ import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api/enderecos")
-@Tag(name = "Endereço", description = "Endpoints para gerenciamento de endereços")
+@Tag(name = "Endereço", description = "Gerenciamento de endereços com integração automática ViaCEP")
 public class EnderecoController {
 
     @Autowired
     private EnderecoService enderecoService;
 
-    /**
-     * Cria um novo endereço
-     */
     @PostMapping
-    @Operation(summary = "Criar endereço", description = "Cadastra um novo endereço no sistema")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
+    @Operation(summary = "Criar endereço", description = "Cadastra um endereço. Envie apenas CEP, Número e Complemento.")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "201", description = "Endereço criado com sucesso"),
-        @ApiResponse(responseCode = "400", description = "Dados inválidos"),
-        @ApiResponse(responseCode = "500", description = "Erro interno do servidor")
+        @ApiResponse(responseCode = "400", description = "CEP inexistente ou dados inválidos"),
+        @ApiResponse(responseCode = "500", description = "Falha na comunicação com serviço externo (ViaCEP)")
     })
-    public ResponseEntity<EnderecoModel> criarEndereco(
-            @Valid @RequestBody EnderecoDto enderecoDto) {
+    public ResponseEntity<?> criarEndereco(@Valid @RequestBody EnderecoDto enderecoDto) {
         try {
             EnderecoModel endereco = enderecoService.criarEndereco(enderecoDto);
             return ResponseEntity.status(HttpStatus.CREATED).body(endereco);
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
         }
     }
 
-    /**
-     * Busca um endereço pelo ID
-     */
     @GetMapping("/{id}")
-    @Operation(summary = "Buscar endereço por ID", description = "Retorna os dados do endereço pelo ID")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
+    @Operation(summary = "Buscar por ID", description = "Retorna os detalhes de um endereço específico.")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Endereço encontrado"),
+        @ApiResponse(responseCode = "403", description = "Você não tem permissão para ver este endereço"),
         @ApiResponse(responseCode = "404", description = "Endereço não encontrado")
     })
-    public ResponseEntity<EnderecoModel> buscarPorId(
-            @Parameter(description = "ID do endereço")
-            @PathVariable Long id) {
+    public ResponseEntity<?> buscarPorId(
+            @Parameter(description = "ID do endereço", example = "1") @PathVariable Long id) {
         try {
             EnderecoModel endereco = enderecoService.buscarPorId(id);
             return ResponseEntity.ok(endereco);
         } catch (EnderecoNotFoundException e) {
             return ResponseEntity.notFound().build();
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse("Acesso negado."));
         }
     }
 
-    /**
-     * Lista todos os endereços
-     */
-    @GetMapping
-    @Operation(summary = "Listar endereços", description = "Retorna uma lista com todos os endereços cadastrados")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Lista de endereços retornada com sucesso")
-    })
-    public ResponseEntity<List<EnderecoModel>> listarTodos() {
-        List<EnderecoModel> enderecos = enderecoService.listarTodos();
-        return ResponseEntity.ok(enderecos);
-    }
-
-    /**
-     * Busca endereços por CEP
-     */
-    @GetMapping("/cep/{cep}")
-    @Operation(summary = "Buscar endereços por CEP", description = "Retorna endereços com o CEP informado")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Endereços encontrados"),
-        @ApiResponse(responseCode = "400", description = "CEP inválido")
-    })
-    public ResponseEntity<List<EnderecoModel>> buscarPorCep(
-            @Parameter(description = "CEP do endereço (apenas números)")
-            @PathVariable String cep) {
-        List<EnderecoModel> enderecos = enderecoService.buscarPorCep(cep);
-        return ResponseEntity.ok(enderecos);
-    }
-
-    /**
-     * Busca endereços por cidade
-     */
-    @GetMapping("/cidade/{cidade}")
-    @Operation(summary = "Buscar endereços por cidade", description = "Retorna endereços na cidade informada")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Endereços encontrados")
-    })
-    public ResponseEntity<List<EnderecoModel>> buscarPorCidade(
-            @Parameter(description = "Nome da cidade")
-            @PathVariable String cidade) {
-        List<EnderecoModel> enderecos = enderecoService.buscarPorCidade(cidade);
-        return ResponseEntity.ok(enderecos);
-    }
-
-    /**
-     * Busca endereços por estado
-     */
-    @GetMapping("/estado/{estado}")
-    @Operation(summary = "Buscar endereços por estado", description = "Retorna endereços no estado informado")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Endereços encontrados")
-    })
-    public ResponseEntity<List<EnderecoModel>> buscarPorEstado(
-            @Parameter(description = "Sigla do estado")
-            @PathVariable String estado) {
-        List<EnderecoModel> enderecos = enderecoService.buscarPorEstado(estado);
-        return ResponseEntity.ok(enderecos);
-    }
-
-    /**
-     * Busca endereços por bairro
-     */
-    @GetMapping("/bairro/{bairro}")
-    @Operation(summary = "Buscar endereços por bairro", description = "Retorna endereços no bairro informado")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Endereços encontrados")
-    })
-    public ResponseEntity<List<EnderecoModel>> buscarPorBairro(
-            @Parameter(description = "Nome do bairro")
-            @PathVariable String bairro) {
-        List<EnderecoModel> enderecos = enderecoService.buscarPorBairro(bairro);
-        return ResponseEntity.ok(enderecos);
-    }
-
-    /**
-     * Busca endereços por cidade e estado
-     */
-    @GetMapping("/cidade-estado")
-    @Operation(summary = "Buscar endereços por cidade e estado", description = "Retorna endereços na cidade e estado informados")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "Endereços encontrados")
-    })
-    public ResponseEntity<List<EnderecoModel>> buscarPorCidadeEEstado(
-            @Parameter(description = "Nome da cidade")
-            @RequestParam String cidade,
-            @Parameter(description = "Sigla do estado")
-            @RequestParam String estado) {
-        List<EnderecoModel> enderecos = enderecoService.buscarPorCidadeEEstado(cidade, estado);
-        return ResponseEntity.ok(enderecos);
-    }
-
-    /**
-     * Atualiza um endereço
-     */
     @PutMapping("/{id}")
-    @Operation(summary = "Atualizar endereço", description = "Atualiza os dados de um endereço existente")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
+    @Operation(summary = "Atualizar endereço", description = "Atualiza os dados. Se o CEP for novo, a rua e cidade serão corrigidas automaticamente.")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "Endereço atualizado com sucesso"),
-        @ApiResponse(responseCode = "404", description = "Endereço não encontrado"),
-        @ApiResponse(responseCode = "400", description = "Dados inválidos")
+        @ApiResponse(responseCode = "400", description = "Dados inválidos ou novo CEP não encontrado"),
+        @ApiResponse(responseCode = "404", description = "ID de endereço não existe")
     })
-    public ResponseEntity<EnderecoModel> atualizarEndereco(
-            @Parameter(description = "ID do endereço")
-            @PathVariable Long id,
+    public ResponseEntity<?> atualizarEndereco(
+            @Parameter(description = "ID do endereço", example = "1") @PathVariable Long id, 
             @Valid @RequestBody EnderecoDto enderecoDto) {
         try {
             EnderecoModel endereco = enderecoService.atualizarEndereco(id, enderecoDto);
             return ResponseEntity.ok(endereco);
         } catch (EnderecoNotFoundException e) {
             return ResponseEntity.notFound().build();
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
         }
     }
 
-    /**
-     * Deleta um endereço
-     */
+    @GetMapping("/consultar-cep/{cep}")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
+    @Operation(summary = "Consultar ViaCEP", description = "Apenas consulta a API externa, sem salvar no banco de dados.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Dados do CEP retornados com sucesso"),
+        @ApiResponse(responseCode = "400", description = "Formato de CEP inválido")
+    })
+    public ResponseEntity<?> consultarViaCep(@PathVariable String cep) {
+        try {
+            return ResponseEntity.ok(enderecoService.consultarCepExterno(cep));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ErrorResponse(e.getMessage()));
+        }
+    }
+
     @DeleteMapping("/{id}")
-    @Operation(summary = "Deletar endereço", description = "Remove um endereço do sistema")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Deletar endereço (Admin)", description = "Remove permanentemente um endereço do sistema.")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "204", description = "Endereço deletado com sucesso"),
-        @ApiResponse(responseCode = "404", description = "Endereço não encontrado")
+        @ApiResponse(responseCode = "404", description = "ID não encontrado")
     })
-    public ResponseEntity<Void> deletarEndereco(
-            @Parameter(description = "ID do endereço")
-            @PathVariable Long id) {
+    public ResponseEntity<?> deletarEndereco(@PathVariable Long id) {
         try {
             enderecoService.deletarEndereco(id);
             return ResponseEntity.noContent().build();
         } catch (EnderecoNotFoundException e) {
             return ResponseEntity.notFound().build();
         }
+    }
+
+    // Endpoints de Auditoria (Admin)
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Listar todos", description = "Visualização global para administradores.")
+    public ResponseEntity<List<EnderecoModel>> listarTodos() {
+        return ResponseEntity.ok(enderecoService.listarTodos());
+    }
+
+    // Classe de erro padrão para as respostas 400 e 403
+    static class ErrorResponse {
+        private String mensagem;
+        public ErrorResponse(String mensagem) { this.mensagem = mensagem; }
+        public String getMensagem() { return mensagem; }
+        public void setMensagem(String mensagem) { this.mensagem = mensagem; }
     }
 }

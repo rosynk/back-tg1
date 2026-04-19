@@ -1,110 +1,70 @@
 package bizi.com.demo.endereco;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
 import lombok.NoArgsConstructor;
 
-@Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class EnderecoDto {
 
+    @Schema(hidden = true) // Isso faz o ID sumir do exemplo do Swagger
     private Long id;
-
-    @NotBlank(message = "Rua é obrigatória")
-    @Size(min = 2, max = 100, message = "Rua deve ter entre 2 e 100 caracteres")
-    private String rua;
-
-	@NotNull(message = "Número é obrigatório")
-    private Integer numero;
-
-    @Size(max = 50, message = "Complemento deve ter no máximo 50 caracteres")
-    private String complemento;
-
-    @NotBlank(message = "Bairro é obrigatório")
-    @Size(min = 2, max = 50, message = "Bairro deve ter entre 2 e 50 caracteres")
-    private String bairro;
-
-    @NotBlank(message = "Cidade é obrigatória")
-    @Size(min = 2, max = 50, message = "Cidade deve ter entre 2 e 50 caracteres")
-    private String cidade;
-
-    @NotBlank(message = "Estado é obrigatório")
-    @Size(min = 2, max = 2, message = "Estado deve ter exatamente 2 caracteres")
-    private String estado;
 
     @NotBlank(message = "CEP é obrigatório")
     @Pattern(regexp = "^\\d{8}$", message = "CEP deve conter exatamente 8 dígitos")
+    @Schema(example = "01001000", description = "CEP apenas números")
     private String cep;
+
+    @NotNull(message = "Número é obrigatório")
+    @Schema(example = "123")
+    private Integer numero;
+
+    @Schema(example = "Apto 42", description = "Opcional")
+    @Size(max = 50, message = "Complemento deve ter no máximo 50 caracteres")
+    private String complemento;
+
+    // Campos abaixo marcados como hidden=true ou readOnly=true no Swagger
+    // pois o ViaCEP preencherá automaticamente no Service.
     
-    public Long getId() {
-		return id;
-	}
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY) 
+    private String rua;
 
-	public void setId(Long id) {
-		this.id = id;
-	}
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY)
+    private String bairro;
 
-	public String getRua() {
-		return rua;
-	}
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY)
+    private String cidade;
 
-	public void setRua(String rua) {
-		this.rua = rua;
-	}
+    @Schema(accessMode = Schema.AccessMode.READ_ONLY)
+    private String estado;
 
-	public Integer getNumero() {
-		return numero;
-	}
+    // Getters e Setters (Mantidos para o Spring conseguir trabalhar)
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-	public void setNumero(Integer numero) {
-		this.numero = numero;
-	}
+    public String getRua() { return rua; }
+    public void setRua(String rua) { this.rua = rua; }
 
-	public String getComplemento() {
-		return complemento;
-	}
+    public Integer getNumero() { return numero; }
+    public void setNumero(Integer numero) { this.numero = numero; }
 
-	public void setComplemento(String complemento) {
-		this.complemento = complemento;
-	}
+    public String getComplemento() { return complemento; }
+    public void setComplemento(String complemento) { this.complemento = complemento; }
 
-	public String getBairro() {
-		return bairro;
-	}
+    public String getBairro() { return bairro; }
+    public void setBairro(String bairro) { this.bairro = bairro; }
 
-	public void setBairro(String bairro) {
-		this.bairro = bairro;
-	}
+    public String getCidade() { return cidade; }
+    public void setCidade(String cidade) { this.cidade = cidade; }
 
-	public String getCidade() {
-		return cidade;
-	}
+    public String getEstado() { return estado; }
+    public void setEstado(String estado) { this.estado = estado; }
 
-	public void setCidade(String cidade) {
-		this.cidade = cidade;
-	}
-
-	public String getEstado() {
-		return estado;
-	}
-
-	public void setEstado(String estado) {
-		this.estado = estado;
-	}
-
-	public String getCep() {
-		return cep;
-	}
-
-	public void setCep(String cep) {
-		this.cep = cep;
-	}
-
+    public String getCep() { return cep; }
+    public void setCep(String cep) { this.cep = cep; }
 }
