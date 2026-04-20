@@ -71,7 +71,14 @@ public class TransferenciaService {
                 .findByNumeroAgenciaAndNumeroConta(dto.getAgenciaDestino(), dto.getNumeroContaDestino())
                 .orElseThrow(() -> new ContaBancariaNotFoundException("Conta de destino inexistente."));
 
+<<<<<<< HEAD
         validarTransferencia(dto, contaOrigem, contaDestino);
+=======
+        ContaBancariaModel contaDestino = contaBancariaRepository.findById(dto.getContaDestino())
+                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta de destino não encontrada"));
+
+        // 3. Validações de negócio (BACEN)
+>>>>>>> 7e3b48c1de2fff536173cae117042e650f20deca
         validarContasAtivas(contaOrigem, contaDestino);
         validarSaldo(contaOrigem, dto.getValor());
         validarLimitesDiarios(contaOrigem.getId(), dto.getValor());

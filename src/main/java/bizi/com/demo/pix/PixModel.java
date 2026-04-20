@@ -1,11 +1,26 @@
 package bizi.com.demo.pix;
 
 import bizi.com.demo.transacao.TransacaoModel;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "pix_envios")
-public class PixModel {   
+@Table(name = "pix")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class PixModel {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -16,45 +31,22 @@ public class PixModel {
     @JoinColumn(name = "id_transacao", nullable = false)
     private TransacaoModel transacao;
 
-    @Column(name = "chave_pix_destino", nullable = false)
-    private String chavePixDestino;
+    @Column(name = "conta_destino", nullable = false)
+    private Long contaDestino;
 
-    @Column(name = "mensagem")
-    private String mensagem; 
+    // Chave Pix usada na transação (CPF, e-mail, telefone ou aleatória)
+    @Column(name = "chave_pix", nullable = false)
+    private String chavePix;
 
-    public PixModel() {}
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-    // --- Getters e Setters ---
+    public TransacaoModel getTransacao() { return transacao; }
+    public void setTransacao(TransacaoModel transacao) { this.transacao = transacao; }
 
-    public Long getId() {
-        return id;
-    }
+    public Long getContaDestino() { return contaDestino; }
+    public void setContaDestino(Long contaDestino) { this.contaDestino = contaDestino; }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public TransacaoModel getTransacao() {
-        return transacao;
-    }
-
-    public void setTransacao(TransacaoModel transacao) {
-        this.transacao = transacao;
-    }
-
-    public String getChavePixDestino() {
-        return chavePixDestino;
-    }
-
-    public void setChavePixDestino(String chavePixDestino) {
-        this.chavePixDestino = chavePixDestino;
-    }
-
-    public String getMensagem() {
-        return mensagem;
-    }
-
-    public void setMensagem(String mensagem) {
-        this.mensagem = mensagem;
-    }
+    public String getChavePix() { return chavePix; }
+    public void setChavePix(String chavePix) { this.chavePix = chavePix; }
 }

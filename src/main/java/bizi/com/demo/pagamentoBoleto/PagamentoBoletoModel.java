@@ -1,13 +1,7 @@
 package bizi.com.demo.pagamentoBoleto;
 
 import bizi.com.demo.transacao.TransacaoModel;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.MapsId;
-import jakarta.persistence.OneToOne;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,51 +13,36 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PagamentoBoletoModel {
 
-	@Id
-    @Column(name = "id_transacao")
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "id_pagamento")
     private Long id;
 
     @OneToOne
-    @MapsId
-    @JoinColumn(name = "id_transacao")
+    @JoinColumn(name = "id_transacao", nullable = false)
     private TransacaoModel transacao;
 
-    @Column(name = "codigo_barras", nullable = false)
+    @Column(name = "codigo_barras", nullable = false, length = 48)
     private String codigoBarras;
 
-    @Column(name = "nome_beneficiario")
-    private String nomeBeneficiario;
-    
-    public Long getId() {
-		return id;
-	}
+    @Column(name = "ag_beneficiario", nullable = false)
+    private String agBeneficiario;
 
-	public void setId(Long id) {
-		this.id = id;
-	}
+    @Column(name = "conta_beneficiario", nullable = false)
+    private String contaBeneficiario;
 
-	public TransacaoModel getTransacao() {
-		return transacao;
-	}
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-	public void setTransacao(TransacaoModel transacao) {
-		this.transacao = transacao;
-	}
+    public TransacaoModel getTransacao() { return transacao; }
+    public void setTransacao(TransacaoModel transacao) { this.transacao = transacao; }
 
-	public String getCodigoBarras() {
-		return codigoBarras;
-	}
+    public String getCodigoBarras() { return codigoBarras; }
+    public void setCodigoBarras(String codigoBarras) { this.codigoBarras = codigoBarras; }
 
-	public void setCodigoBarras(String codigoBarras) {
-		this.codigoBarras = codigoBarras;
-	}
+    public String getAgBeneficiario() { return agBeneficiario; }
+    public void setAgBeneficiario(String agBeneficiario) { this.agBeneficiario = agBeneficiario; }
 
-	public String getNomeBeneficiario() {
-		return nomeBeneficiario;
-	}
-
-	public void setNomeBeneficiario(String nomeBeneficiario) {
-		this.nomeBeneficiario = nomeBeneficiario;
-	}
-
+    public String getContaBeneficiario() { return contaBeneficiario; }
+    public void setContaBeneficiario(String contaBeneficiario) { this.contaBeneficiario = contaBeneficiario; }
 }

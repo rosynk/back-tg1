@@ -1,8 +1,7 @@
-package bizi.com.demo.pix;
+package bizi.com.demo.pagamentoBoleto;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,22 +11,22 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PixDto {
+public class PagamentoBoletoDto {
 
-    private Long idPix;
+    private Long idPagamento;
     private Long idTransacao;
     private Long contaOrigem;
     private String nomeOrigem;
-    private Long contaDestino;
-    private String nomeDestino;
-    private String chavePix;         // CPF, e-mail, telefone ou chave aleatória
+    private String codigoBarras;
+    private String agBeneficiario;
+    private String contaBeneficiario;
     private BigDecimal valor;
     private String status;
     private LocalDateTime dataHora;
     private String mensagem;
 
-    public Long getIdPix() { return idPix; }
-    public void setIdPix(Long idPix) { this.idPix = idPix; }
+    public Long getIdPagamento() { return idPagamento; }
+    public void setIdPagamento(Long idPagamento) { this.idPagamento = idPagamento; }
 
     public Long getIdTransacao() { return idTransacao; }
     public void setIdTransacao(Long idTransacao) { this.idTransacao = idTransacao; }
@@ -38,14 +37,14 @@ public class PixDto {
     public String getNomeOrigem() { return nomeOrigem; }
     public void setNomeOrigem(String nomeOrigem) { this.nomeOrigem = nomeOrigem; }
 
-    public Long getContaDestino() { return contaDestino; }
-    public void setContaDestino(Long contaDestino) { this.contaDestino = contaDestino; }
+    public String getCodigoBarras() { return codigoBarras; }
+    public void setCodigoBarras(String codigoBarras) { this.codigoBarras = codigoBarras; }
 
-    public String getNomeDestino() { return nomeDestino; }
-    public void setNomeDestino(String nomeDestino) { this.nomeDestino = nomeDestino; }
+    public String getAgBeneficiario() { return agBeneficiario; }
+    public void setAgBeneficiario(String agBeneficiario) { this.agBeneficiario = agBeneficiario; }
 
-    public String getChavePix() { return chavePix; }
-    public void setChavePix(String chavePix) { this.chavePix = chavePix; }
+    public String getContaBeneficiario() { return contaBeneficiario; }
+    public void setContaBeneficiario(String contaBeneficiario) { this.contaBeneficiario = contaBeneficiario; }
 
     public BigDecimal getValor() { return valor; }
     public void setValor(BigDecimal valor) { this.valor = valor; }
