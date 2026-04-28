@@ -4,8 +4,19 @@ import { Router, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
+
+interface Usuario {
+  idUsuario: number;
+  nomeCompleto: string;
+  cpf: string;
+}
+
+
 interface Transacao {
-  data: string; tipo: string; valor: number; detalhes: string;
+  dataHora: string;      // No Java: private LocalDateTime dataHora
+  tipoTransacao: string; // No Java: private TipoTransacao tipoTransacao
+  valor: number;         // No Java: private BigDecimal valor
+  cpfDestino?: string;   // Opcional: para mostrar pra quem ele mandou
 }
 
 interface Extrato {
@@ -13,7 +24,12 @@ interface Extrato {
 }
 
 interface Conta {
-  id: number; usuarioId: number; tipoConta: string; numeroAgencia: string; numeroConta: string;
+  id: number;
+  usuario: Usuario; // Objeto completo vindo do Backend
+  tipoConta: string;
+  numeroAgencia: string;
+  numeroConta: string;
+  saldo: number;    // Adicionado o campo saldo!
 }
 
 @Component({
@@ -68,17 +84,18 @@ export class DashboardComponent implements OnInit {
     this.loading = true;
 
     // 1. Busca Extrato
-    this.http.get<Extrato>(`${this.API_BASE}/transacoes/extrato`).subscribe({
-      next: (data) => {
-        this.extrato = data;
-        this.loading = false;
-        console.log('✅ Extrato OK');
-      },
-      error: (err) => {
-        this.loading = false;
-        this.tratarErro(err);
-      }
-    });
+    this.http.get<Transacao[]>(`${this.API_BASE}/transacoes/extrato`).subscribe({
+  next: (data) => {
+    // Criamos o objeto que o seu HTML espera manualmente
+    this.extrato = {
+      titular: this.conta?.usuario?.nomeCompleto || '',
+      saldoAtual: this.conta?.saldo || 0,
+      transacoes: data // 'data' aqui já é a lista List<TransacaoModel> do Java
+    };
+    this.loading = false;
+    console.log('✅ Extrato carregado com', data.length, 'itens');
+  }
+});
 
     // 2. Busca Conta
     this.http.get<Conta[]>(`${this.API_BASE}/contas`).subscribe({

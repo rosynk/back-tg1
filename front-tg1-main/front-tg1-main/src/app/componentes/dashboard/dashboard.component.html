@@ -7,10 +7,10 @@
     <div class="db-user">
       <div class="db-avatar">{{ (extrato?.titular || 'U')[0].toUpperCase() }}</div>
       <div>
-        <div class="db-user-name">{{ extrato?.titular || 'Carregando...' }}</div>
-        <div class="db-user-tag">Premium Vault · Verified</div>
+          <div class="db-user-name">{{ conta?.usuario?.nomeCompleto || 'Carregando...' }}</div>
+          <div class="db-user-tag">Cofre Premium · Verificado</div>
       </div>
-    </div>
+      </div>
 
     <nav class="db-nav">
       <span class="db-nav-section">Main</span>
@@ -81,7 +81,7 @@
           Saldo disponível
         </p>
         <h1 class="db-balance-val">
-          {{ extrato?.saldoAtual != null ? (extrato!.saldoAtual | currency:'BRL':'symbol':'1.2-2') : 'R$ --,--' }}
+          {{ conta?.saldo != null ? (conta!.saldo | currency:'BRL':'symbol':'1.2-2') : 'R$ --,--' }}
         </h1>
         <span class="db-balance-badge">
           <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
@@ -141,9 +141,9 @@
             <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
           </div>
           <div class="db-tx-info">
-            <p class="db-tx-title">{{ tx.detalhes }}</p>
-            <p class="db-tx-sub">{{ tx.tipo }} · {{ tx.data | date:'dd/MM/yyyy, HH:mm' }}</p>
-          </div>
+               <p class="db-tx-title">Transferência para {{ tx.cpfDestino || 'Destinatário' }}</p>
+               <p class="db-tx-sub">{{ tx.tipoTransacao }} · {{ tx.dataHora | date:'dd/MM/yyyy, HH:mm' }}</p>
+           </div>
           <span class="db-tx-val" [class.credit]="tx.valor > 0" [class.debit]="tx.valor < 0">
             {{ tx.valor > 0 ? '+' : '' }}{{ tx.valor | currency:'BRL':'symbol':'1.2-2' }}
           </span>
