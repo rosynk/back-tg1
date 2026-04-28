@@ -108,8 +108,16 @@ export class AuthService {
   }
 
   isAuthenticated(): boolean {
-    return !!this.getToken();
+  const token = this.getToken();
+  if (!token) return false;
+
+  // Se o token existe mas o usuário sumiu do Subject (comum em redirects rápidos)
+  if (!this.currentUserSubject.value) {
+    this.decodeAndSetUser(token); // Tenta recuperar na hora
   }
+
+  return !!this.currentUserSubject.value;
+}
 
   getCurrentUser(): User | null {
     return this.currentUserSubject.value;

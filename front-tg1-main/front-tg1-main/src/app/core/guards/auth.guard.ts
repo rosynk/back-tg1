@@ -1,10 +1,10 @@
 import { inject } from '@angular/core';
 import { Router, CanActivateFn, ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/router';
 import { AuthService } from '../services/auth.service';
+import { map, take } from 'rxjs/operators';
 
 /**
- * AuthGuard Corrigido e Otimizado
- * Garante que o usuário esteja autenticado e possua as permissões (roles) necessárias.
+ * Guardian com Inspeção de Tokens e Roles
  */
 export const authGuard: CanActivateFn = (
   route: ActivatedRouteSnapshot,
@@ -13,42 +13,62 @@ export const authGuard: CanActivateFn = (
   const authService = inject(AuthService);
   const router = inject(Router);
 
-  // 1. Verifica se existe um token válido (e não expirado, se você tiver essa lógica)
-  if (authService.isAuthenticated()) {
-    const user = authService.getCurrentUser();
-    const requiredRoles = route.data['roles'] as Array<string>;
+  return authService.currentUser$.pipe(
+    take(1),
+    map(user => {
+      const token = authService.getToken();
+      const requiredRoles = route.data['roles'] as Array<string>;
 
-    // Debug opcional no console do navegador (F12)
-    console.log(`🛡️ [Guard] Acessando: ${state.url}`);
-    console.log('👤 [Guard] Usuário Atual:', user);
-    console.log('🔑 [Guard] Permissões Requeridas:', requiredRoles);
+      console.log('--- 🛡️ INSPEÇÃO DO GUARDIAN ---');
+      console.log('📍 Rota Alvo:', state.url);
+      console.log('🔑 Token Encontrado:', token ? 'SIM (Inicia com: ' + token.substring(0, 15) + '...)' : 'NÃO');
 
-    // 2. Se a rota não exige nenhuma Role específica, o acesso é liberado
-    if (!requiredRoles || requiredRoles.length === 0) {
-      return true;
-    }
+      // 1. Verificação de Autenticação Básica
+      if (!token) {
+        console.error('🛑 [Guard] Acesso Bloqueado: Usuário não possui Token.');
+        router.navigate(['/login'], { queryParams: { returnUrl: state.url } });
+        return false;
+      }
 
-    // 3. Verifica se o usuário possui a Role necessária
-    // DICA: Certifique-se de que o backend envia a string EXATA (ex: 'ADMIN' ou 'USER')
-    if (user && user.role && requiredRoles.includes(user.role)) {
-      return true;
-    }
+      // 2. Recuperação do Usuário (Plano B caso o Subject esteja nulo)
+      let currentUser = user;
+      if (!currentUser && token) {
+        console.warn('⚠️ [Guard] Usuário nulo no Subject, tentando reidratar via Token...');
+        // Forçamos a decodificação se o estado sumiu
+        authService['decodeAndSetUser'](token);
+        currentUser = authService.getCurrentUser();
+      }
 
-    // 4. Caso logado mas sem a permissão correta
-    console.warn(`🚫 [Guard] Acesso negado para a Role: ${user?.role}`);
+      console.log('👤 Dados do Usuário no Sistema:', currentUser);
 
-    // Redireciona para o dashboard ou uma página de "não autorizado"
-    router.navigate(['/dashboard']);
-    return false;
-  }
+      // 3. Validação de Permissões (Roles)
+      if (!requiredRoles || requiredRoles.length === 0) {
+        console.log('✅ [Guard] Acesso Liberado: Rota pública ou sem restrição de Role.');
+        return true;
+      }
 
-  // 5. Se não estiver autenticado, redireciona para o login
-  // Opcional: Salvar a URL que o usuário tentou acessar para redirecionar após o login
-  console.error('🛑 [Guard] Usuário não autenticado. Redirecionando para login...');
+      console.log('📋 Roles Necessárias para esta rota:', requiredRoles);
+      console.log('🎫 Role que o Usuário possui:', currentUser?.role);
 
-  router.navigate(['/login'], {
-    queryParams: { returnUrl: state.url }
-  });
+      const hasRole = currentUser && currentUser.role && requiredRoles.includes(currentUser.role);
 
-  return false;
+      if (hasRole) {
+        console.log('✅ [Guard] Acesso Autorizado! Role compatível.');
+        return true;
+      }
+
+      // 4. Tratamento de Erro de Permissão
+      console.error('🚫 [Guard] Acesso Negado: O usuário logado não tem a permissão necessária.');
+
+      // Se ele está logado mas a role é errada, mandamos para o dashboard (ou 403)
+      // para evitar o loop infinito de voltar para o login.
+      if (currentUser) {
+        router.navigate(['/dashboard']);
+      } else {
+        router.navigate(['/login']);
+      }
+
+      return false;
+    })
+  );
 };
