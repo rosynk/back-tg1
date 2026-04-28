@@ -80,7 +80,8 @@ public class TransferenciaService {
         // MOVIMENTAÇÃO
         contaOrigem.setSaldo(contaOrigem.getSaldo().subtract(dto.getValor()));
         contaBancariaRepository.save(contaOrigem);
-        TransacaoModel transacaoSaida = criarTransacao(contaOrigem, TipoTransacao.TRANSFERENCIA_ENVIADA, dto.getValor());
+        TransacaoModel transacaoSaida = criarTransacao(contaOrigem, TipoTransacao.TRANSFERENCIA_ENVIADA,
+                dto.getValor());
 
         contaDestino.setSaldo(contaDestino.getSaldo().add(dto.getValor()));
         contaBancariaRepository.save(contaDestino);
@@ -124,13 +125,13 @@ public class TransferenciaService {
 
         for (TransferenciaModel t : transacoes) {
             boolean isEnvio = t.getTransacao().getContaBancaria().getId().equals(idConta);
-            
+
             csv.append(t.getId()).append(";")
-               .append(t.getTransacao().getDataHora()).append(";")
-               .append(isEnvio ? t.getTransacao().getValor().negate() : t.getTransacao().getValor()).append(";")
-               .append(isEnvio ? "TRANSFERENCIA ENVIADA" : "TRANSFERENCIA RECEBIDA").append(";")
-               .append(t.getContaDestino()).append(";")
-               .append("CONCLUIDA\n");
+                    .append(t.getTransacao().getDataHora()).append(";")
+                    .append(isEnvio ? t.getTransacao().getValor().negate() : t.getTransacao().getValor()).append(";")
+                    .append(isEnvio ? "TRANSFERENCIA ENVIADA" : "TRANSFERENCIA RECEBIDA").append(";")
+                    .append(t.getContaDestino()).append(";")
+                    .append("CONCLUIDA\n");
         }
 
         return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -140,7 +141,8 @@ public class TransferenciaService {
 
     private ContaBancariaModel buscarContaOrigem(Long idDto) {
         if (!isUsuarioAdmin()) {
-            return contaBancariaRepository.findByUsuarioEmail(getEmailLogado())
+            // MUDANÇA AQUI: use findByUsuarioCpf em vez de findByUsuarioEmail
+            return contaBancariaRepository.findByUsuarioCpf(getEmailLogado())
                     .stream().findFirst()
                     .orElseThrow(() -> new ContaBancariaNotFoundException("Sua conta de origem não foi encontrada."));
         }
@@ -157,7 +159,8 @@ public class TransferenciaService {
         return transacaoRepository.save(transacao);
     }
 
-    private TransferenciaDto montarRecibo(TransferenciaDto dto, TransferenciaModel model, ContaBancariaModel origem, ContaBancariaModel destino, LocalDateTime data) {
+    private TransferenciaDto montarRecibo(TransferenciaDto dto, TransferenciaModel model, ContaBancariaModel origem,
+            ContaBancariaModel destino, LocalDateTime data) {
         TransferenciaDto recibo = new TransferenciaDto();
         recibo.setIdTransferencia(model.getId());
         recibo.setContaOrigem(origem.getId());
@@ -213,7 +216,8 @@ public class TransferenciaService {
         if (valor.compareTo(LIMITE_TED_HORARIO) > 0) {
             LocalTime agora = LocalTime.now();
             if (agora.isBefore(HORARIO_INICIO_TED) || agora.isAfter(HORARIO_FIM_TED)) {
-                throw new RuntimeException("TED acima de R$ 5.000 só é permitido em horário comercial (06:30 às 17:00).");
+                throw new RuntimeException(
+                        "TED acima de R$ 5.000 só é permitido em horário comercial (06:30 às 17:00).");
             }
         }
     }
@@ -221,8 +225,13 @@ public class TransferenciaService {
     public TransferenciaModel buscarPorId(Long id) {
         TransferenciaModel t = transferenciaRepository.findById(id)
                 .orElseThrow(() -> new TransferenciaNotFoundException("Transferência não encontrada."));
-        
+
         validarAcessoConta(t.getTransacao().getContaBancaria().getId());
         return t;
+    }
+
+    private ContaBancariaModel buscarContaOrigem(String cpfDoToken) {
+        return contaBancariaRepository.findByUsuarioCpf(cpfDoToken) // Certifique-se que o repository tem esse método
+                .orElseThrow(() -> new ContaBancariaNotFoundException("Sua conta de origem não foi encontrada."));
     }
 }
