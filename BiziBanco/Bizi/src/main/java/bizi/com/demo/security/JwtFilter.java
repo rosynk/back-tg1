@@ -32,25 +32,38 @@ public class JwtFilter extends OncePerRequestFilter {
 
         String token = recoverToken(request);
 
+        // LOG DE ENTRADA: Verifica se o header chegou
+        if (request.getRequestURI().startsWith("/api")) {
+            System.out.println("🔍 [Filtro] Requisição para: " + request.getRequestURI() + " | Token presente: "
+                    + (token != null));
+        }
+
         if (token != null) {
-            String email = tokenService.getSubject(token);
+            try {
+                String cpf = tokenService.getClaimCpf(token);
 
-            if (email != null) {
-                var usuario = repository.findByEmail(email);
+                if (cpf != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                    var usuarioOpt = repository.findByCpf(cpf);
 
-                if (usuario.isPresent()) {
-                    var user = usuario.get();
-                    // Garante o prefixo ROLE_ para o Spring Security
-                    String role = user.getRole().name();
-                    if (!role.startsWith("ROLE_"))
-                        role = "ROLE_" + role;
+                    if (usuarioOpt.isPresent()) {
+                        var user = usuarioOpt.get();
+                        String roleName = user.getRole().name();
+                        // Garante o prefixo ROLE_ para o Spring Security
+                        String finalRole = roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;
 
-                    var authority = new SimpleGrantedAuthority(role);
-                    var authentication = new UsernamePasswordAuthenticationToken(user, null,
-                            Collections.singletonList(authority));
+                        var authority = new SimpleGrantedAuthority(finalRole);
+                        var authentication = new UsernamePasswordAuthenticationToken(user, null,
+                                Collections.singletonList(authority));
 
-                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                        SecurityContextHolder.getContext().setAuthentication(authentication);
+                        System.out.println("✅ [Auth] Sucesso! CPF: " + cpf + " acessando com " + finalRole);
+                    } else {
+                        System.out.println("⚠️ [Auth] CPF " + cpf + " não encontrado no banco.");
+                    }
                 }
+            } catch (Exception e) {
+                // Se o token expirou ou a assinatura é inválida, cairá aqui
+                System.err.println("❌ [Auth] Erro ao validar token JWT: " + e.getMessage());
             }
         }
 

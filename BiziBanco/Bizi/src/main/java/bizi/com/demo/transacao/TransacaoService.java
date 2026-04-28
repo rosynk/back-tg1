@@ -3,6 +3,7 @@ package bizi.com.demo.transacao;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.math.BigDecimal;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.AccessDeniedException;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import bizi.com.demo.contaBancaria.ContaBancariaModel;
 import bizi.com.demo.contaBancaria.ContaBancariaNotFoundException;
 import bizi.com.demo.contaBancaria.ContaBancariaRepository;
+import bizi.com.demo.usuario.UsuarioModel;
 
 @Service
 public class TransacaoService {
@@ -23,8 +25,10 @@ public class TransacaoService {
     @Autowired
     private ContaBancariaRepository contaBancariaRepository;
 
-    private String getEmailLogado() {
-        return SecurityContextHolder.getContext().getAuthentication().getName();
+    // --- APOIO: SEGURANÇA E CONTEXTO ---
+
+    private UsuarioModel getUsuarioLogado() {
+        return (UsuarioModel) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
     }
 
     private boolean isUsuarioAdmin() {
@@ -32,147 +36,152 @@ public class TransacaoService {
                 .stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
     }
 
+    private void validarPosseConta(ContaBancariaModel conta) {
+        if (isUsuarioAdmin())
+            return;
+        String cpfLogado = getUsuarioLogado().getCpf();
+        if (!cpfLogado.equals(conta.getUsuario().getCpf())) {
+            throw new AccessDeniedException("Acesso Negado: CPF do titular não confere com o usuário logado.");
+        }
+    }
+
+    // --- OPERAÇÕES FINANCEIRAS ---
+
     @Transactional
     public TransacaoModel criarTransacao(TransacaoDto dto) {
+        // 1. Busca a conta bancária pelo ID fornecido no DTO
         ContaBancariaModel conta = contaBancariaRepository.findById(dto.getIdConta())
-                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta bancária não encontrada"));
+                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta bancária não encontrada."));
 
-        if (!isUsuarioAdmin() && !conta.getUsuario().getEmail().equals(getEmailLogado())) {
-            throw new AccessDeniedException("Você não tem permissão para criar transações nesta conta.");
-        }
+        // 2. Valida se o usuário logado (via Token) é o dono da conta
+        validarPosseConta(conta);
 
+        // 3. Instancia a transação e preenche os dados
         TransacaoModel transacao = new TransacaoModel();
         transacao.setContaBancaria(conta);
-        
-        // CORREÇÃO: Se o DTO envia String, convertemos para o Enum
-        if (dto.getTipoTransacao() != null) {
-            transacao.setTipoTransacao(TipoTransacao.valueOf(dto.getTipoTransacao().toUpperCase()));
-        }
-        
         transacao.setValor(dto.getValor());
         transacao.setDataHora(LocalDateTime.now());
 
-        return transacaoRepository.save(transacao);
-    }
-
-    @Transactional
-    public TransacaoModel atualizarTransacao(Long id, TransacaoDto dto) {
-        if (!isUsuarioAdmin()) {
-            throw new AccessDeniedException("Transações bancárias não podem ser editadas por clientes.");
-        }
-        
-        TransacaoModel transacao = buscarPorId(id);
-        
-        // CORREÇÃO: Conversão de String para Enum aqui também
+        // Converte o tipo enviado no JSON para o Enum (ex: "SAQUE" ->
+        // TipoTransacao.SAQUE)
         if (dto.getTipoTransacao() != null) {
             transacao.setTipoTransacao(TipoTransacao.valueOf(dto.getTipoTransacao().toUpperCase()));
         }
-        
-        if (dto.getValor() != null) transacao.setValor(dto.getValor());
-        
+
+        // Preenche o CPF de origem para o histórico do extrato
+        transacao.setCpfOrigem(getUsuarioLogado().getCpf());
+
+        // 4. Salva no banco de dados
         return transacaoRepository.save(transacao);
     }
 
     @Transactional
-    public TransacaoModel registrarDebito(ContaBancariaModel conta, BigDecimal valor) {
-        // 1. Atualiza o saldo da conta
-        BigDecimal novoSaldo = conta.getSaldo().subtract(valor);
-        conta.setSaldo(novoSaldo);
+    public TransacaoModel realizarSaque(BigDecimal valor) {
+        String cpf = getUsuarioLogado().getCpf();
+        ContaBancariaModel conta = contaBancariaRepository.findByUsuarioCpf(cpf)
+                .orElseThrow(() -> new RuntimeException("Conta não localizada para o CPF logado."));
+
+        if (conta.getSaldo().compareTo(valor) < 0) {
+            throw new RuntimeException("Saldo insuficiente.");
+        }
+
+        conta.setSaldo(conta.getSaldo().subtract(valor));
         contaBancariaRepository.save(conta);
 
-        // 2. Cria o registro no extrato
-        TransacaoModel transacao = new TransacaoModel();
-        transacao.setContaBancaria(conta);
-        transacao.setValor(valor);
-        
-        // Aqui já usamos o Enum diretamente, pois o registrarDebito é interno
-        transacao.setTipoTransacao(TipoTransacao.PIX_SAIDA); 
-        transacao.setDataHora(LocalDateTime.now());
-
-        return transacaoRepository.save(transacao);
+        return salvarTransacao(conta, valor, TipoTransacao.SAQUE);
     }
 
-    // --- Métodos de busca permanecem iguais ---
-    
+    @Transactional
+    public void realizarDeposito(BigDecimal valor) {
+        String cpf = getUsuarioLogado().getCpf();
+        ContaBancariaModel conta = contaBancariaRepository.findByUsuarioCpf(cpf)
+                .orElseThrow(() -> new RuntimeException("Conta não localizada para depósito."));
+
+        conta.setSaldo(conta.getSaldo().add(valor));
+        contaBancariaRepository.save(conta);
+
+        salvarTransacao(conta, valor, TipoTransacao.DEPOSITO);
+    }
+
+    private TransacaoModel salvarTransacao(ContaBancariaModel conta, BigDecimal valor, TipoTransacao tipo) {
+        TransacaoModel t = new TransacaoModel();
+        t.setContaBancaria(conta);
+        t.setValor(valor);
+        t.setTipoTransacao(tipo);
+        t.setDataHora(LocalDateTime.now());
+        // Se sua model tiver campos cpfOrigem/Destino, preencha-os aqui:
+        t.setCpfOrigem(getUsuarioLogado().getCpf());
+        return transacaoRepository.save(t);
+    }
+
+    // --- MÉTODOS DE BUSCA (EXTRATO E FILTROS) ---
+
+    public List<TransacaoModel> listarExtratoCompleto() {
+        // Busca todas as transações onde o usuário participou (CPF origem ou destino)
+        return transacaoRepository.findByCpfParaExtrato(getUsuarioLogado().getCpf());
+    }
+
+    public List<TransacaoModel> buscarPorPeriodo(LocalDateTime inicio, LocalDateTime fim) {
+        String cpf = getUsuarioLogado().getCpf();
+        // Filtra o extrato por data
+        return transacaoRepository.findByCpfParaExtrato(cpf).stream()
+                .filter(t -> t.getDataHora().isAfter(inicio) && t.getDataHora().isBefore(fim))
+                .collect(Collectors.toList());
+    }
+
+    public List<TransacaoModel> buscarPorTipo(TipoTransacao tipo) {
+        String cpf = getUsuarioLogado().getCpf();
+        return transacaoRepository.findByCpfParaExtrato(cpf).stream()
+                .filter(t -> t.getTipoTransacao().equals(tipo))
+                .collect(Collectors.toList());
+    }
+
     public TransacaoModel buscarPorId(Long id) {
         TransacaoModel transacao = transacaoRepository.findById(id)
-                .orElseThrow(() -> new TransacaoNotFoundException("Transação não encontrada"));
-        if (!isUsuarioAdmin() && !transacao.getContaBancaria().getUsuario().getEmail().equals(getEmailLogado())) {
-            throw new AccessDeniedException("Acesso negado a esta transação.");
-        }
+                .orElseThrow(() -> new TransacaoNotFoundException("Transação " + id + " não encontrada."));
+
+        validarPosseConta(transacao.getContaBancaria());
         return transacao;
     }
 
-    public List<TransacaoModel> buscarPorConta(Long idConta) {
-        ContaBancariaModel conta = contaBancariaRepository.findById(idConta)
-                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta não encontrada"));
-        if (!isUsuarioAdmin() && !conta.getUsuario().getEmail().equals(getEmailLogado())) {
-            throw new AccessDeniedException("Você só pode ver transações das suas próprias contas.");
-        }
-        return transacaoRepository.findByContaBancariaId(idConta);
-    }
+    // --- GESTÃO (ADMIN) ---
 
-    public List<TransacaoModel> listarTodas() {
-        if (!isUsuarioAdmin()) {
-            throw new AccessDeniedException("Apenas administradores podem listar todas as transações do banco.");
-        }
+    public List<TransacaoModel> listarTudoAdmin() {
+        if (!isUsuarioAdmin())
+            throw new AccessDeniedException("Acesso negado.");
         return transacaoRepository.findAll();
     }
 
     @Transactional
     public void deletarTransacao(Long id) {
-        if (!isUsuarioAdmin()) {
-            throw new AccessDeniedException("Proibido excluir registros do histórico bancário.");
-        }
-        TransacaoModel transacao = buscarPorId(id);
-        transacaoRepository.delete(transacao);
+        if (!isUsuarioAdmin())
+            throw new AccessDeniedException("Somente administradores deletam registros.");
+        if (!transacaoRepository.existsById(id))
+            throw new TransacaoNotFoundException("ID inválido.");
+        transacaoRepository.deleteById(id);
     }
-    
-    @Transactional
-    public TransacaoModel realizarSaque(BigDecimal valor) {
-        // 1. Pega o e-mail do usuário que está logado no sistema
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
 
-        // 2. Busca a conta desse usuário
-        ContaBancariaModel conta = contaBancariaRepository.findAll().stream()
-                .filter(c -> c.getUsuario().getEmail().equals(email))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("Conta não encontrada para o usuário logado."));
-
-        // 3. Validação de Saldo
-        if (conta.getSaldo().compareTo(valor) < 0) {
-            throw new RuntimeException("Saldo insuficiente para realizar o saque.");
-        }
-
-        // 4. Atualiza o saldo da conta no banco
-        conta.setSaldo(conta.getSaldo().subtract(valor));
-        contaBancariaRepository.save(conta);
-
-        // 5. Registra o evento na tabela de transações
-        TransacaoModel transacao = new TransacaoModel();
-        transacao.setContaBancaria(conta);
-        transacao.setValor(valor);
-        transacao.setTipoTransacao(TipoTransacao.SAQUE); // O Enum que já criamos
-        transacao.setDataHora(LocalDateTime.now());
-
-        return transacaoRepository.save(transacao);
+    // 🔥 Alterado de listarTudoAdmin para listarTodas
+    public List<TransacaoModel> listarTodas() {
+        if (!isUsuarioAdmin())
+            throw new AccessDeniedException("Acesso negado.");
+        return transacaoRepository.findAll();
     }
-    
-    @Transactional
-    public void realizarDeposito(BigDecimal valor) {
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        ContaBancariaModel conta = contaBancariaRepository.findAll().stream()
-                .filter(c -> c.getUsuario().getEmail().equals(email))
-                .findFirst().orElseThrow();
 
-        conta.setSaldo(conta.getSaldo().add(valor));
-        contaBancariaRepository.save(conta);
+    /**
+     * Busca o histórico de uma conta específica validando se o
+     * usuário logado tem permissão para vê-la.
+     */
+    public List<TransacaoModel> buscarPorConta(Long idConta) {
+        // 1. Busca a conta no banco
+        ContaBancariaModel conta = contaBancariaRepository.findById(idConta)
+                .orElseThrow(
+                        () -> new ContaBancariaNotFoundException("Conta bancária " + idConta + " não encontrada."));
 
-        TransacaoModel t = new TransacaoModel();
-        t.setContaBancaria(conta);
-        t.setValor(valor);
-        t.setTipoTransacao(TipoTransacao.DEPOSITO);
-        t.setDataHora(LocalDateTime.now());
-        transacaoRepository.save(t);
+        // 2. Valida a posse (Segurança baseada no CPF do Token)
+        validarPosseConta(conta);
+
+        // 3. Retorna a lista ordenada por data
+        return transacaoRepository.findByContaBancariaIdOrderByDataHoraDesc(idConta);
     }
 }

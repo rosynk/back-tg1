@@ -4,14 +4,14 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException; // IMPORTANTE
-import org.springframework.security.access.prepost.PreAuthorize; // IMPORTANTE
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import bizi.com.demo.contaBancaria.ContaBancariaNotFoundException;
-import bizi.com.demo.proposta.PropostaController.ErrorResponse;
+import bizi.com.demo.usuario.UsuarioModel;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -25,77 +25,110 @@ public class TransacaoController {
     @Autowired
     private TransacaoService transacaoService;
 
+    @Operation(summary = "Buscar transações por conta", description = "Retorna o histórico validando o CPF do titular.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Histórico recuperado com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado: CPF não confere"),
+            @ApiResponse(responseCode = "404", description = "Conta bancária não encontrada"),
+            @ApiResponse(responseCode = "500", description = "Erro interno no servidor")
+    })
+    @GetMapping("/conta/{idConta}")
+    @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
+    public ResponseEntity<?> buscarPorConta(@PathVariable Long idConta) {
+        try {
+            return ResponseEntity.ok(transacaoService.buscarPorConta(idConta));
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(e.getMessage()));
+        } catch (ContaBancariaNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new ErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Erro ao buscar transações: " + e.getMessage()));
+        }
+    }
+
+    @Operation(summary = "Criar transação", description = "Cria depósito, saque ou transferência validando a posse da conta via CPF.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Transação criada com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Usuário não autorizado a transacionar nesta conta"),
+            @ApiResponse(responseCode = "400", description = "Dados da transação inválidos")
+    })
     @PostMapping
-    @Operation(summary = "Criar transação", description = "Clientes criam em suas contas; Admins em qualquer conta.")
-    @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')") // Ambos podem tentar
+    @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
     public ResponseEntity<?> criarTransacao(@Valid @RequestBody TransacaoDto transacaoDto) {
         try {
             TransacaoModel transacao = transacaoService.criarTransacao(transacaoDto);
             return ResponseEntity.status(HttpStatus.CREATED).body(transacao);
         } catch (AccessDeniedException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(e.getMessage()));
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(new ErrorResponse("Erro ao processar transação"));
         }
     }
 
-    @GetMapping("/{id}")
-    @Operation(summary = "Buscar por ID", description = "Dono vê a dele; Admin vê todas.")
-    @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
-    public ResponseEntity<?> buscarPorId(@PathVariable Long id) {
+    @Operation(summary = "Consulta o extrato bancário", description = "Retorna todas as transações vinculadas ao CPF do usuário autenticado.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Extrato recuperado com sucesso"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado - Permissão insuficiente"),
+            @ApiResponse(responseCode = "500", description = "Erro interno ao processar a consulta")
+    })
+    @PreAuthorize("hasRole('CLIENTE')")
+    @GetMapping("/extrato")
+    public ResponseEntity<?> exibirExtrato() {
         try {
-            return ResponseEntity.ok(transacaoService.buscarPorId(id));
-        } catch (AccessDeniedException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-        } catch (TransacaoNotFoundException e) {
-            return ResponseEntity.notFound().build();
-        }
-    }
-
-    @GetMapping("/conta/{idConta}")
-    @Operation(summary = "Buscar transações por conta", description = "Retorna o histórico de transações de uma conta específica.")
-    @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
-    public ResponseEntity<?> buscarPorConta(@PathVariable Long idConta) {
-        try {
-            // O Service deve receber o ID da conta (Ex: 3 ou 4)
-            return ResponseEntity.ok(transacaoService.buscarPorConta(idConta));
-        } catch (ContaBancariaNotFoundException e) {
-            // Se a conta não existir, retorna 404 em vez de quebrar o sistema
-            return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                                 .body(new ErrorResponse("Erro: " + e.getMessage()));
+            // Chamamos o método da Service que já cuida de pegar o CPF do usuário
+            // autenticado
+            List<TransacaoModel> extrato = transacaoService.listarExtratoCompleto();
+            return ResponseEntity.ok(extrato);
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                 .body(new ErrorResponse("Erro inesperado: " + e.getMessage()));
+                    .body(new ErrorResponse("Erro ao gerar extrato: " + e.getMessage()));
         }
     }
 
+    @Operation(summary = "Listar todas (ADMIN)", description = "Retorna o log global de todas as transações do banco.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Lista global recuperada"),
+            @ApiResponse(responseCode = "403", description = "Acesso negado: Requer ROLE_ADMIN")
+    })
     @GetMapping
-    @Operation(summary = "Listar todas (ADMIN APENAS)", description = "Retorna o histórico global do banco.")
-    @PreAuthorize("hasRole('ADMIN')") // Marcos nem vê o resultado aqui
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<List<TransacaoModel>> listarTodas() {
         return ResponseEntity.ok(transacaoService.listarTodas());
     }
 
-    @PutMapping("/{id}")
-    @Operation(summary = "Atualizar transação (ADMIN APENAS)", description = "Apenas para correções administrativas.")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> atualizarTransacao(@PathVariable Long id, @Valid @RequestBody TransacaoDto transacaoDto) {
-        try {
-            return ResponseEntity.ok(transacaoService.atualizarTransacao(id, transacaoDto));
-        } catch (AccessDeniedException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
-        }
-    }
-
+    @Operation(summary = "Deletar transação", description = "Remoção física de um registro de transação.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Transação removida"),
+            @ApiResponse(responseCode = "403", description = "Somente administradores podem deletar registros")
+    })
     @DeleteMapping("/{id}")
-    @Operation(summary = "Deletar transação (ADMIN APENAS)", description = "Remoção física de registro.")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> deletarTransacao(@PathVariable Long id) {
         try {
             transacaoService.deletarTransacao(id);
             return ResponseEntity.noContent().build();
         } catch (AccessDeniedException e) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(new ErrorResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
+    // Classe auxiliar interna para padronizar erros JSON
+    public static class ErrorResponse {
+        private String mensagem;
+
+        public ErrorResponse(String mensagem) {
+            this.mensagem = mensagem;
+        }
+
+        public String getMensagem() {
+            return mensagem;
+        }
+
+        public void setMensagem(String mensagem) {
+            this.mensagem = mensagem;
         }
     }
 }

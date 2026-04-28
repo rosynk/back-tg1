@@ -6,8 +6,8 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
   const token = authService.getToken();
 
-  // Verifica se a requisição é para o seu servidor para evitar enviar token para APIs externas
-  const isApiUrl = req.url.startsWith('http://localhost:8086');
+  // Se a URL for para o seu backend (porta 8086)
+  const isApiUrl = req.url.includes(':8086') || req.url.startsWith('/api');
 
   if (token && isApiUrl) {
     req = req.clone({
@@ -15,7 +15,9 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
         Authorization: `Bearer ${token}`
       }
     });
-    console.log('🚀 Interceptor: Token anexado para:', req.url);
+    console.log('🚀 [Interceptor] Token anexado para:', req.url);
+  } else if (!token && isApiUrl) {
+    console.warn('🚨 [Interceptor] Tentativa de acesso à API sem Token!');
   }
 
   return next(req);

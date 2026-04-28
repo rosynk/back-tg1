@@ -25,22 +25,34 @@ public class TransacaoModel {
     @Column(name = "data_hora", nullable = false)
     private LocalDateTime dataHora;
 
-    @Enumerated(EnumType.STRING) 
+    @Enumerated(EnumType.STRING)
     @Column(name = "tipo_transacao", nullable = false)
-    private TipoTransacao tipoTransacao; // Agora tipado como Enum
+    private TipoTransacao tipoTransacao;
+
+    // 🔥 NOVOS CAMPOS PARA SUPORTAR A LÓGICA DE CPF DO TOKEN
+    @Column(name = "cpf_origem")
+    private String cpfOrigem;
+
+    @Column(name = "cpf_destino")
+    private String cpfDestino;
 
     // Construtores
-    public TransacaoModel() {}
+    public TransacaoModel() {
+    }
 
-    public TransacaoModel(Long id, ContaBancariaModel contaBancaria, BigDecimal valor, LocalDateTime dataHora, TipoTransacao tipoTransacao) {
+    public TransacaoModel(Long id, ContaBancariaModel contaBancaria, BigDecimal valor,
+            LocalDateTime dataHora, TipoTransacao tipoTransacao,
+            String cpfOrigem, String cpfDestino) {
         this.id = id;
         this.contaBancaria = contaBancaria;
         this.valor = valor;
         this.dataHora = dataHora;
         this.tipoTransacao = tipoTransacao;
+        this.cpfOrigem = cpfOrigem;
+        this.cpfDestino = cpfDestino;
     }
 
-    // --- Getters e Setters Corrigidos ---
+    // --- Getters e Setters (Mantendo os antigos e adicionando os novos) ---
 
     public Long getId() {
         return id;
@@ -74,12 +86,28 @@ public class TransacaoModel {
         this.dataHora = dataHora;
     }
 
-    // Unificamos para receber e retornar apenas o objeto TipoTransacao
     public TipoTransacao getTipoTransacao() {
         return tipoTransacao;
     }
 
     public void setTipoTransacao(TipoTransacao tipoTransacao) {
         this.tipoTransacao = tipoTransacao;
+    }
+
+    // 🔥 NOVOS GETTERS E SETTERS
+    public String getCpfOrigem() {
+        return cpfOrigem;
+    }
+
+    public void setCpfOrigem(String cpfOrigem) {
+        this.cpfOrigem = cpfOrigem;
+    }
+
+    public String getCpfDestino() {
+        return cpfDestino;
+    }
+
+    public void setCpfDestino(String cpfDestino) {
+        this.cpfDestino = cpfDestino;
     }
 }

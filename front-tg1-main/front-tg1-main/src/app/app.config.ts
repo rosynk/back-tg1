@@ -1,29 +1,30 @@
 import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
 import { provideRouter, withComponentInputBinding, withViewTransitions } from '@angular/router';
-import { provideHttpClient, withInterceptors, withFetch } from '@angular/common/http';
+import { provideHttpClient, withInterceptors } from '@angular/common/http'; // Removido withFetch para teste
 
 import { routes } from './app.routes';
 import { jwtInterceptor } from './core/interceptors/jwt.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
-    // 1. Otimização da detecção de mudanças (padrão Angular 18)
+    // 1. Detecção de mudanças otimizada
     provideZoneChangeDetection({ eventCoalescing: true }),
 
-    // 2. Configuração de Rotas com binding de parâmetros e transições suaves
+    // 2. Configuração de Rotas
     provideRouter(
       routes,
-      withComponentInputBinding(), // Permite receber parâmetros da URL como @Input
-      withViewTransitions()        // Adiciona transições suaves entre páginas
+      withComponentInputBinding(),
+      withViewTransitions()
     ),
 
-    // 3. Configuração do Cliente HTTP
+    // 3. Configuração do Cliente HTTP (Ajustada)
     provideHttpClient(
-      // ✅ Essencial para o seu projeto: Registra o interceptor do Token
-      withInterceptors([jwtInterceptor]),
+      // Mantemos apenas os interceptores funcionais por enquanto
+      withInterceptors([jwtInterceptor])
 
-      // ✅ Habilita o uso da API 'fetch' (mais moderna e performática que o XHR antigo)
-      withFetch()
+      // ⚠️ REMOVIDO: withFetch()
+      // Motivo: No Angular 18, o withFetch pode ignorar interceptores se não estiver
+      // configurado em conjunto com polyfills específicos ou se a versão do Node for antiga.
     )
   ]
 };

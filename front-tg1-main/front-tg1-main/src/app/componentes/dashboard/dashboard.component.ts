@@ -1,9 +1,10 @@
+
 import { Component, OnInit } from '@angular/core';
-import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { HttpClient } from '@angular/common/http';
 import { Router, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 
-// 1. GARANTA QUE AS INTERFACES ESTÃO AQUI NO TOPO
+// Interfaces para tipagem dos dados vindos do banco BiziBanco
 interface Transacao {
   data: string;
   tipo: string;
@@ -11,7 +12,7 @@ interface Transacao {
   detalhes: string;
 }
 
-interface Extrato { // <--- Verifique se o nome está exatamente assim
+interface Extrato {
   titular: string;
   saldoAtual: number;
   transacoes: Transacao[];
@@ -25,6 +26,7 @@ interface Conta {
   numeroConta: string;
 }
 
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
@@ -33,9 +35,8 @@ interface Conta {
   styleUrl: './dashboard.component.css'
 })
 export class DashboardComponent implements OnInit {
-  // 2. Agora o TypeScript vai reconhecer o tipo Extrato aqui
   extrato: Extrato | null = null;
-  conta: any = null;
+  conta: Conta | null = null; // Tipado corretamente
   loading = true;
   erro = '';
 
@@ -49,34 +50,32 @@ export class DashboardComponent implements OnInit {
 
   carregarDados() {
     this.loading = true;
-    const token = localStorage.getItem('token');
 
-    // Se não tiver token, nem tenta a requisição e volta pro login
-    if (!token) {
-      this.router.navigate(['/login']);
-      return;
-    }
-
-    const headers = new HttpHeaders().set('Authorization', `Bearer ${token}`);
-
-    // Busca Extrato
-    this.http.get<Extrato>(`${this.API_BASE}/extrato`, { headers }).subscribe({
+    // ✅ Chamada simplificada: O Interceptor anexa o Token automaticamente
+    this.http.get<Extrato>(`${this.API_BASE}/extrato`).subscribe({
       next: (data) => {
         this.extrato = data;
         this.loading = false;
+        console.log('✅ Dados do extrato carregados com sucesso');
       },
       error: (err) => {
-        this.erro = 'Erro ao carregar extrato.';
         this.loading = false;
+        if (err.status === 403 || err.status === 401) {
+          this.erro = 'Sessão expirada. Redirecionando...';
+          setTimeout(() => this.router.navigate(['/login']), 2000);
+        } else {
+          this.erro = 'Não foi possível carregar os dados financeiros.';
+        }
+        console.error('❌ Erro na requisição:', err);
       }
     });
 
-    // Busca Contas (O Java retorna uma lista, então usamos <any[]> ou <Conta[]>)
-    this.http.get<Conta[]>(`${this.API_BASE}/contas`, { headers }).subscribe({
+    // Chamada de contas também simplificada
+    this.http.get<Conta[]>(`${this.API_BASE}/contas`).subscribe({
       next: (data) => {
         this.conta = data.length > 0 ? data[0] : null;
       },
-      error: (err) => console.error('Erro ao carregar contas', err)
+      error: (err) => console.error('Erro ao buscar contas:', err)
     });
   }
 }

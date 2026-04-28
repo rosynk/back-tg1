@@ -1,14 +1,7 @@
 import { bootstrapApplication } from '@angular/platform-browser';
-import { LoginComponent } from './app/componentes/login/login.component';
-import { provideHttpClient } from '@angular/common/http';
-import { importProvidersFrom } from '@angular/core';
-import { RouterModule } from '@angular/router';
-import { routes } from './app/app.routes';
 import { AppComponent } from './app/app.component';
+import { appConfig } from './app/app.config'; // Importa a configuração correta
 
-bootstrapApplication(AppComponent, {
-  providers: [
-    provideHttpClient(),
-    importProvidersFrom(RouterModule.forRoot(routes))
-  ]
-});
+// Aqui é onde a mágica acontece: usamos o appConfig que já tem o Interceptor
+bootstrapApplication(AppComponent, appConfig)
+  .catch((err) => console.error(err));

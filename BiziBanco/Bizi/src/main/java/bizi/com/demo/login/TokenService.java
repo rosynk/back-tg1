@@ -22,14 +22,33 @@ public class TokenService {
     public String gerarToken(UsuarioModel usuario) {
         try {
             Algorithm algoritmo = Algorithm.HMAC256(secret);
+
+            String roleStr = usuario.getRole().name();
+            String finalRole = roleStr.startsWith("ROLE_") ? roleStr : "ROLE_" + roleStr;
+
             return JWT.create()
                     .withIssuer(ISSUER)
                     .withSubject(usuario.getEmail())
-                    .withClaim("role", usuario.getRole().name())
+                    .withClaim("role", finalRole)
+                    .withClaim("cpf", usuario.getCpf()) // 🔥 AGORA O CPF ESTÁ NO TOKEN
                     .withExpiresAt(dataExpiracao())
                     .sign(algoritmo);
         } catch (JWTCreationException exception) {
             throw new RuntimeException("Erro ao gerar token JWT", exception);
+        }
+    }
+
+    // Adicione este método para extrair o CPF de forma fácil no Filtro
+    public String getClaimCpf(String tokenJWT) {
+        try {
+            Algorithm algoritmo = Algorithm.HMAC256(secret);
+            return JWT.require(algoritmo)
+                    .withIssuer(ISSUER)
+                    .build()
+                    .verify(tokenJWT)
+                    .getClaim("cpf").asString();
+        } catch (JWTVerificationException exception) {
+            return null;
         }
     }
 
@@ -42,7 +61,6 @@ public class TokenService {
                     .verify(tokenJWT)
                     .getSubject();
         } catch (JWTVerificationException exception) {
-            // Retornar null em vez de estourar erro ajuda o filtro a continuar o fluxo
             return null;
         }
     }

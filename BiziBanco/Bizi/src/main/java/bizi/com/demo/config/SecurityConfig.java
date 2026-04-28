@@ -10,6 +10,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -22,6 +23,7 @@ import java.util.List;
 
 @Configuration
 @EnableMethodSecurity
+@EnableWebSecurity
 public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
@@ -47,32 +49,25 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // 1. Permissões Públicas
+                        // 1. ROTAS PÚBLICAS
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers(
-                                "/swagger-ui/**",
-                                "/swagger-ui.html",
-                                "/v3/api-docs/**",
-                                "/api-docs/**",
-                                "/api-docs")
+                        .requestMatchers("/api/auth/**", "/api/login/**", "/api/usuarios/**", "/api/onboarding/**",
+                                "/error")
                         .permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/usuarios").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/onboarding/**").permitAll()
-                        .requestMatchers("/api/auth/**").permitAll()
-                        .requestMatchers("/error").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
 
-                        // 2. Controle de Acesso por Role (CORRIGIDO)
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        // 2. CONTROLE DE ACESSO (Usando hasAuthority para bater com ROLE_CLIENTE do
+                        // banco)
+                        .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
 
-                        // Liberando explicitamente os endpoints que estavam dando 403 para o Cliente
-                        .requestMatchers("/api/cliente/**").hasAnyRole("CLIENTE", "ADMIN")
-                        .requestMatchers("/api/contas/**").hasAnyRole("CLIENTE", "ADMIN")
-                        .requestMatchers("/api/extrato/**").hasAnyRole("CLIENTE", "ADMIN")
+                        .requestMatchers("/api/cliente/**", "/api/contas/**", "/api/extrato/**")
+                        .hasAnyAuthority("ROLE_CLIENTE", "ROLE_ADMIN")
 
-                        .requestMatchers("/api/dependentes/**").hasRole("FILHO")
+                        .requestMatchers("/api/dependentes/**").hasAuthority("ROLE_FILHO")
 
-                        // 3. Qualquer outra rota exige autenticação
+                        // 3. QUALQUER OUTRA ROTA
                         .anyRequest().authenticated())
+
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -80,23 +75,22 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("http://localhost:4200"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        configuration.setAllowedHeaders(List.of(
-                "Authorization",
-                "Content-Type",
-                "Accept",
-                "X-Requested-With",
-                "Origin",
-                "Access-Control-Request-Method",
-                "Access-Control-Request-Headers"));
+        CorsConfiguration config = new CorsConfiguration();
 
-        configuration.setExposedHeaders(List.of("Authorization"));
-        configuration.setAllowCredentials(true);
+        // DICA: Verifique se seu Angular não subiu na porta 8080 ou outra. 4200 é o
+        // padrão.
+        config.setAllowedOrigins(List.of("http://localhost:4200", "http://127.0.0.1:4200"));
+
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+
+        // Liberando todos os headers para evitar que o Interceptor do Angular seja
+        // barrado
+        config.setAllowedHeaders(List.of("*"));
+
+        config.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration);
+        source.registerCorsConfiguration("/**", config);
         return source;
     }
 }
