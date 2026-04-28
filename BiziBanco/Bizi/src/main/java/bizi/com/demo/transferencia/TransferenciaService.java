@@ -51,9 +51,10 @@ public class TransferenciaService {
      */
     private void validarAcessoConta(Long idConta) {
         if (!isUsuarioAdmin()) {
-            ContaBancariaModel contaLogada = contaBancariaRepository.findByUsuarioEmail(getEmailLogado())
-                    .stream().findFirst()
-                    .orElseThrow(() -> new AccessDeniedException("Usuário não possui conta vinculada."));
+            // Mudamos de findByUsuarioEmail para findByUsuarioCpf
+            ContaBancariaModel contaLogada = contaBancariaRepository.findByUsuarioCpf(getCpfLogado())
+                    .orElseThrow(
+                            () -> new AccessDeniedException("Usuário não possui conta vinculada ao CPF informado."));
 
             if (!contaLogada.getId().equals(idConta)) {
                 throw new AccessDeniedException("Você não tem permissão para acessar dados de outra conta.");
@@ -62,6 +63,26 @@ public class TransferenciaService {
     }
 
     // --- LÓGICA PRINCIPAL ---
+
+    private TransacaoModel criarTransacao(ContaBancariaModel conta, TipoTransacao tipo, BigDecimal valor) {
+        // Ele chama o novo método passando null ou o CPF da própria conta por padrão
+        return criarTransacao(conta, tipo, valor, conta.getUsuario().getCpf(), null);
+    }
+
+    private TransacaoModel criarTransacao(ContaBancariaModel conta, TipoTransacao tipo, BigDecimal valor,
+            String cpfOrigem, String cpfDestino) {
+        TransacaoModel transacao = new TransacaoModel();
+        transacao.setContaBancaria(conta);
+        transacao.setTipoTransacao(tipo);
+        transacao.setValor(valor);
+        transacao.setDataHora(LocalDateTime.now());
+
+        // Aqui os campos que farão o Dashboard funcionar
+        transacao.setCpfOrigem(cpfOrigem);
+        transacao.setCpfDestino(cpfDestino);
+
+        return transacaoRepository.save(transacao);
+    }
 
     @Transactional
     public TransferenciaDto realizarTransferencia(TransferenciaDto dto) {
@@ -139,26 +160,6 @@ public class TransferenciaService {
 
     // --- AUXILIARES ---
 
-    private ContaBancariaModel buscarContaOrigem(Long idDto) {
-        if (!isUsuarioAdmin()) {
-            // MUDANÇA AQUI: use findByUsuarioCpf em vez de findByUsuarioEmail
-            return contaBancariaRepository.findByUsuarioCpf(getEmailLogado())
-                    .stream().findFirst()
-                    .orElseThrow(() -> new ContaBancariaNotFoundException("Sua conta de origem não foi encontrada."));
-        }
-        return contaBancariaRepository.findById(idDto)
-                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta de origem não encontrada."));
-    }
-
-    private TransacaoModel criarTransacao(ContaBancariaModel conta, TipoTransacao tipo, BigDecimal valor) {
-        TransacaoModel transacao = new TransacaoModel();
-        transacao.setContaBancaria(conta);
-        transacao.setTipoTransacao(tipo);
-        transacao.setValor(valor);
-        transacao.setDataHora(LocalDateTime.now());
-        return transacaoRepository.save(transacao);
-    }
-
     private TransferenciaDto montarRecibo(TransferenciaDto dto, TransferenciaModel model, ContaBancariaModel origem,
             ContaBancariaModel destino, LocalDateTime data) {
         TransferenciaDto recibo = new TransferenciaDto();
@@ -176,6 +177,10 @@ public class TransferenciaService {
     }
 
     // --- VALIDAÇÕES ---
+
+    private String getCpfLogado() {
+        return SecurityContextHolder.getContext().getAuthentication().getName();
+    }
 
     private void validarTransferencia(TransferenciaDto dto, ContaBancariaModel origem, ContaBancariaModel destino) {
         if (origem.getId().equals(destino.getId())) {
@@ -230,8 +235,12 @@ public class TransferenciaService {
         return t;
     }
 
-    private ContaBancariaModel buscarContaOrigem(String cpfDoToken) {
-        return contaBancariaRepository.findByUsuarioCpf(cpfDoToken) // Certifique-se que o repository tem esse método
-                .orElseThrow(() -> new ContaBancariaNotFoundException("Sua conta de origem não foi encontrada."));
+    private ContaBancariaModel buscarContaOrigem(Long idDto) {
+        if (!isUsuarioAdmin()) {
+            return contaBancariaRepository.findByUsuarioCpf(getCpfLogado())
+                    .orElseThrow(() -> new ContaBancariaNotFoundException("Sua conta de origem não foi encontrada."));
+        }
+        return contaBancariaRepository.findById(idDto)
+                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta de origem não encontrada."));
     }
 }
