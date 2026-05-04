@@ -36,13 +36,19 @@ public class TransacaoModel {
     @Column(name = "cpf_destino")
     private String cpfDestino;
 
+    @Column(name = "nome_contraparte")
+    private String nomeContraparte;
+
+    @Column(name = "detalhe")
+    private String detalhe;
+
     // Construtores
     public TransacaoModel() {
     }
 
     public TransacaoModel(Long id, ContaBancariaModel contaBancaria, BigDecimal valor,
             LocalDateTime dataHora, TipoTransacao tipoTransacao,
-            String cpfOrigem, String cpfDestino) {
+            String cpfOrigem, String cpfDestino, String nomeContraparte, String detalhe) {
         this.id = id;
         this.contaBancaria = contaBancaria;
         this.valor = valor;
@@ -50,6 +56,8 @@ public class TransacaoModel {
         this.tipoTransacao = tipoTransacao;
         this.cpfOrigem = cpfOrigem;
         this.cpfDestino = cpfDestino;
+        this.nomeContraparte = nomeContraparte;
+        this.detalhe = detalhe;
     }
 
     // --- Getters e Setters (Mantendo os antigos e adicionando os novos) ---
@@ -110,4 +118,27 @@ public class TransacaoModel {
     public void setCpfDestino(String cpfDestino) {
         this.cpfDestino = cpfDestino;
     }
+
+    /**
+     * @return String return the nomeContraparte
+     */
+    public String getNomeContraparte() {
+        return nomeContraparte;
+    }
+
+    /**
+     * @param nomeContraparte the nomeContraparte to set
+     */
+    public void setNomeContraparte(String nomeContraparte) {
+        this.nomeContraparte = nomeContraparte;
+    }
+
+    public String getDetalhe() {
+        return detalhe;
+    }
+
+    public void setDetalhe(String detalhe) {
+        this.detalhe = detalhe;
+    }
+
 }

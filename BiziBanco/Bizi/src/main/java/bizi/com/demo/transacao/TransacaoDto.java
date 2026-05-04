@@ -1,38 +1,35 @@
 package bizi.com.demo.transacao;
 
 import java.math.BigDecimal;
-
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-
-@NoArgsConstructor
-@AllArgsConstructor
 public class TransacaoDto {
 
-	@Id
-	@GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long idConta;
+	@NotNull(message = "ID da conta é obrigatório")
+	private Long idConta;
 
-    @NotBlank(message = "Tipo de transação é obrigatório")
-    @Pattern(regexp = "DEPOSITO|SAQUE|TRANSFERENCIA|PIX", 
-             message = "Tipo de transação deve ser: DEPOSITO, SAQUE, TRANSFERENCIA ou PIX")
-    private String tipoTransacao;
+	@NotNull(message = "Tipo de transação é obrigatório")
+	private TipoTransacao tipoTransacao; // Usando o Enum para evitar Strings erradas
 
-    @NotNull(message = "Valor é obrigatório")
-    @DecimalMin(value = "0.01", message = "Valor deve ser maior que zero")
-    private BigDecimal valor;
-    
-    public Long getIdConta() {
+	@NotNull(message = "Valor é obrigatório")
+	@DecimalMin(value = "0.01", message = "Valor deve ser maior que zero")
+	private BigDecimal valor;
+
+	// --- CAMPOS QUE ESTAVAM FALTANDO ---
+
+	private String cpfDestino; // Necessário para transferência/PIX
+
+	private String nomeContraparte; // Opcional: Se o front já souber o nome
+
+	private String detalhe; // Opcional: Para mensagens personalizadas
+
+	// Construtor padrão para o Jackson (JSON)
+	public TransacaoDto() {
+	}
+
+	// Getters e Setters
+	public Long getIdConta() {
 		return idConta;
 	}
 
@@ -40,11 +37,11 @@ public class TransacaoDto {
 		this.idConta = idConta;
 	}
 
-	public String getTipoTransacao() {
+	public TipoTransacao getTipoTransacao() {
 		return tipoTransacao;
 	}
 
-	public void setTipoTransacao(String tipoTransacao) {
+	public void setTipoTransacao(TipoTransacao tipoTransacao) {
 		this.tipoTransacao = tipoTransacao;
 	}
 
@@ -54,5 +51,29 @@ public class TransacaoDto {
 
 	public void setValor(BigDecimal valor) {
 		this.valor = valor;
+	}
+
+	public String getCpfDestino() {
+		return cpfDestino;
+	}
+
+	public void setCpfDestino(String cpfDestino) {
+		this.cpfDestino = cpfDestino;
+	}
+
+	public String getNomeContraparte() {
+		return nomeContraparte;
+	}
+
+	public void setNomeContraparte(String nomeContraparte) {
+		this.nomeContraparte = nomeContraparte;
+	}
+
+	public String getDetalhe() {
+		return detalhe;
+	}
+
+	public void setDetalhe(String detalhe) {
+		this.detalhe = detalhe;
 	}
 }

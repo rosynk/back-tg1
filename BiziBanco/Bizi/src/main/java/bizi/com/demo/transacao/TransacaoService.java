@@ -15,12 +15,16 @@ import bizi.com.demo.contaBancaria.ContaBancariaModel;
 import bizi.com.demo.contaBancaria.ContaBancariaNotFoundException;
 import bizi.com.demo.contaBancaria.ContaBancariaRepository;
 import bizi.com.demo.usuario.UsuarioModel;
+import bizi.com.demo.usuario.UsuarioRepository;
 
 @Service
 public class TransacaoService {
 
     @Autowired
     private TransacaoRepository transacaoRepository;
+
+    @Autowired
+    private UsuarioRepository usuarioRepository;
 
     @Autowired
     private ContaBancariaRepository contaBancariaRepository;
@@ -45,34 +49,71 @@ public class TransacaoService {
         }
     }
 
-    // --- OPERAÇÕES FINANCEIRAS ---
+    public TransacaoModel criarTransacao(ContaBancariaModel conta, TipoTransacao tipo, BigDecimal valor,
+            String cpfOrigem, String cpfDestino,
+            String nomeContraparte, String detalhe) {
 
-    @Transactional
-    public TransacaoModel criarTransacao(TransacaoDto dto) {
-        // 1. Busca a conta bancária pelo ID fornecido no DTO
-        ContaBancariaModel conta = contaBancariaRepository.findById(dto.getIdConta())
-                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta bancária não encontrada."));
-
-        // 2. Valida se o usuário logado (via Token) é o dono da conta
-        validarPosseConta(conta);
-
-        // 3. Instancia a transação e preenche os dados
+        // 1. Instancia o modelo
         TransacaoModel transacao = new TransacaoModel();
+
+        // 2. Preenche os campos (isso é o que estava faltando!)
         transacao.setContaBancaria(conta);
-        transacao.setValor(dto.getValor());
+        transacao.setTipoTransacao(tipo);
+        transacao.setValor(valor);
+        transacao.setCpfOrigem(cpfOrigem);
+        transacao.setCpfDestino(cpfDestino);
+        transacao.setNomeContraparte(nomeContraparte); // <--- O nome que você buscou pelo CPF
+        transacao.setDetalhe(detalhe); // <--- Ex: "PIX PARA JOÃO"
         transacao.setDataHora(LocalDateTime.now());
 
-        // Converte o tipo enviado no JSON para o Enum (ex: "SAQUE" ->
-        // TipoTransacao.SAQUE)
-        if (dto.getTipoTransacao() != null) {
-            transacao.setTipoTransacao(TipoTransacao.valueOf(dto.getTipoTransacao().toUpperCase()));
+        // 3. Salva efetivamente no banco
+        return transacaoRepository.save(transacao);
+    }
+    // --- OPERAÇÕES FINANCEIRAS ---
+
+    public TransacaoModel criarTransacao(TransacaoDto dto) {
+        // 1. Busca a conta de origem
+        ContaBancariaModel conta = contaBancariaRepository.findById(dto.getIdConta())
+                .orElseThrow(() -> new ContaBancariaNotFoundException("Conta não encontrada"));
+
+        String cpfOrigem = conta.getUsuario().getCpf();
+        String cpfDestino = dto.getCpfDestino();
+
+        // 2. Busca o nome do favorecido (Mantendo sua lógica de busca por CPF)
+        String nomeContraparte;
+        var usuarioOpt = usuarioRepository.findByCpf(cpfDestino);
+
+        if (usuarioOpt.isPresent()) {
+            nomeContraparte = usuarioOpt.get().getNomeCompleto();
+        } else {
+            nomeContraparte = "Conta não localizada";
         }
 
-        // Preenche o CPF de origem para o histórico do extrato
-        transacao.setCpfOrigem(getUsuarioLogado().getCpf());
+        // --- 🚀 A MÁGICA DA FORMATAÇÃO AQUI ---
 
-        // 4. Salva no banco de dados
-        return transacaoRepository.save(transacao);
+        // Transforma "PIX_SAIDA" ou "TED" em algo amigável como "Pix" ou "Ted"
+        String tipoAmigavel = dto.getTipoTransacao().toString()
+                .split("_")[0] // Pega só a primeira parte (ex: de PIX_SAIDA vira PIX)
+                .toLowerCase(); // vira "pix"
+
+        // Deixa a primeira letra maiúscula (vire "Pix")
+        tipoAmigavel = tipoAmigavel.substring(0, 1).toUpperCase() + tipoAmigavel.substring(1);
+
+        // Monta a frase: "Pix enviado para João Silva" ou "Ted enviada para Maria"
+        // Usamos o nome vindo do banco (nomeContraparte) que geralmente já está correto
+        String detalheParaOExtrato = tipoAmigavel + " enviada para " + nomeContraparte;
+
+        // ---------------------------------------
+
+        // 4. Chama o método de persistência com os detalhes formatados
+        return criarTransacao(
+                conta,
+                dto.getTipoTransacao(),
+                dto.getValor(),
+                cpfOrigem,
+                cpfDestino,
+                nomeContraparte,
+                detalheParaOExtrato);
     }
 
     @Transactional
@@ -109,11 +150,19 @@ public class TransacaoService {
         t.setValor(valor);
         t.setTipoTransacao(tipo);
         t.setDataHora(LocalDateTime.now());
-        // Se sua model tiver campos cpfOrigem/Destino, preencha-os aqui:
         t.setCpfOrigem(getUsuarioLogado().getCpf());
+
+        // RESOLUÇÃO DO NULL:
+        // Se for transferência, o TransferenciaService enviará o nome.
+        // Para Saque/Depósito, definimos aqui o que o usuário lerá no extrato.
+        if (tipo == TipoTransacao.SAQUE) {
+            t.setNomeContraparte("Retirada de Recurso");
+        } else if (tipo == TipoTransacao.DEPOSITO) {
+            t.setNomeContraparte("Entrada de Recurso");
+        }
+
         return transacaoRepository.save(t);
     }
-
     // --- MÉTODOS DE BUSCA (EXTRATO E FILTROS) ---
 
     public List<TransacaoModel> listarExtratoCompleto() {

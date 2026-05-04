@@ -47,4 +47,38 @@ export class LoginService {
   redefinirSenha(dados: any): Observable<any> {
     return this.http.post(`${this.API}/redefinir-senha`, dados);
   }
+
+  getDadosConta(): Observable<any> {
+  // Ajuste a URL conforme o seu endpoint no Spring Boot
+  return this.http.get<any>(`${this.API}/conta/detalhes`);
+}
+
+// 1. Método para buscar os dados JSON (para os botões 30, 60, 90)
+// Atualize a assinatura para aceitar dois argumentos do tipo string
+getDadosExtrato(inicio: string, fim: string): Observable<any> {
+  // Ajusta a URL removendo o sufixo /api/auth se necessário, para bater no endpoint /api/extrato
+  const baseUrl = this.API.replace('/api/auth', '');
+  const url = `${baseUrl}/api/extrato?inicio=${inicio}&fim=${fim}`;
+
+  return this.http.get(url);
+}
+
+// Faça o mesmo para o PDF para manter a coerência com a imagem eeeeeee_26.png
+downloadExtratoPdf(inicio: string, fim: string): Observable<Blob> {
+  const baseUrl = this.API.replace('/api/auth', '');
+  const url = `${baseUrl}/api/extrato/exportar-pdf?inicio=${inicio}&fim=${fim}`;
+
+  return this.http.get(url, { responseType: 'blob' });
+}
+
+ getExtratoPorPeriodo(inicio: string, fim: string): Observable<any> {
+  return this.http.get(`${this.API}/extrato?inicio=${inicio}&fim=${fim}`);
+}
+
+// E para o PDF
+downloadExtratoPdfPeriodo(inicio: string, fim: string): Observable<Blob> {
+  return this.http.get(`${this.API}/extrato/pdf?inicio=${inicio}&fim=${fim}`, {
+    responseType: 'blob'
+  });
+}
 }

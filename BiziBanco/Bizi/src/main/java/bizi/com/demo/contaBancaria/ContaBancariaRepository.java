@@ -35,4 +35,6 @@ public interface ContaBancariaRepository extends JpaRepository<ContaBancariaMode
 
     Optional<ContaBancariaModel> findByUsuarioCpf(String cpf);
 
+    Optional<ContaBancariaModel> findByUsuario_Id(Long usuarioId);
+
 }

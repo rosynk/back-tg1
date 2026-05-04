@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
-
+import { AuthService, User } from '../../core/services/auth.service';
 @Component({
   selector: 'app-transferencia',
   standalone: true,
@@ -12,11 +12,13 @@ import { RouterModule } from '@angular/router';
   styleUrl: './transferencia.component.css'
 })
 export class TransferenciaComponent implements OnInit {
+  // Dados dinâmicos do Usuário e Conta
+  usuarioLogado: User | null = null; //
   extrato: any = null;
   conta: any = null;
 
   // Propriedades de controle de estado (UI)
-  loading = false;          // Corrigindo o erro ngtsc(2339)
+  loading = false;
   loadingTransfer = false;
   msgSucesso = '';
   msgErro = '';
@@ -31,16 +33,24 @@ export class TransferenciaComponent implements OnInit {
 
   private readonly API_BASE = 'http://localhost:8086/api';
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    public authService: AuthService // Injetando o serviço de autenticação
+  ) {}
 
   ngOnInit() {
+    // 1. Subscreve ao usuário logado para atualizar o "Cofre Premium"
+    this.authService.currentUser$.subscribe(user => {
+      this.usuarioLogado = user; //
+    });
+
     this.carregarDadosIniciais();
   }
 
   carregarDadosIniciais() {
-    this.loading = true; // Inicia o estado de carregamento global
+    this.loading = true;
 
-    // 1. Busca extrato para saldo e transações
+    // 1. Busca extrato para saldo e transações (Saldo Atualizado)
     this.http.get<any>(`${this.API_BASE}/transacoes/extrato`).subscribe({
       next: (data) => {
         this.extrato = data;
@@ -52,7 +62,7 @@ export class TransferenciaComponent implements OnInit {
       }
     });
 
-    // 2. Busca dados da conta origem
+    // 2. Busca dados da conta origem (Agência e Conta)
     this.http.get<any[]>(`${this.API_BASE}/contas`).subscribe({
       next: (contas) => {
         if (contas && contas.length > 0) {
@@ -84,7 +94,7 @@ export class TransferenciaComponent implements OnInit {
         this.msgSucesso = 'Transferência realizada com sucesso!';
         this.loadingTransfer = false;
         this.limparFormulario();
-        this.carregarDadosIniciais(); // Atualiza o saldo e a lista de atividades
+        this.carregarDadosIniciais(); // Atualiza saldo, agência e conta após o envio
       },
       error: (err) => {
         this.msgErro = err.error?.mensagem || 'Erro ao realizar transferência.';
@@ -93,7 +103,7 @@ export class TransferenciaComponent implements OnInit {
     });
   }
 
-  // Método solicitado para o botão da Sidebar
+  // Método para o botão da Sidebar
   testeNavegacao() {
     console.log('Navegação funcionando corretamente!');
     alert('Sistema de navegação Bizi Bank ativo.');

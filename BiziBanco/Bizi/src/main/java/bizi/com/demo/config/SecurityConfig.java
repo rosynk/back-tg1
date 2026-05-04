@@ -51,9 +51,22 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 1. ROTAS PÚBLICAS
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/auth/**", "/api/login/**", "/api/usuarios/**", "/api/onboarding/**",
+                        .requestMatchers(
+                                "/api/auth/**",
+                                "/api/login/**",
+                                "/api/usuarios/**",
+                                "/api/onboarding/**",
                                 "/error")
                         .permitAll()
+
+                        // ADICIONE/MANTENHA ESTAS LINHAS AQUI:
+                        .requestMatchers(
+                                "/swagger-ui/**",
+                                "/swagger-ui.html",
+                                "/v3/api-docs/**",
+                                "/v3/api-docs.yaml",
+                                "/api-docs/**" // Adicione esta para garantir o config do swagger
+                        ).permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
 
                         // 2. CONTROLE DE ACESSO (Usando hasAuthority para bater com ROLE_CLIENTE do

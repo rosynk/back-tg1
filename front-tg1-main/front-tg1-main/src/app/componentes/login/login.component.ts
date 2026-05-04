@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { ReactiveFormsModule, FormBuilder, Validators } from '@angular/forms';
+import { ReactiveFormsModule, FormBuilder, Validators, FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import { LoginService } from '../../core/services/login.service';
@@ -7,7 +7,8 @@ import { LoginService } from '../../core/services/login.service';
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, RouterModule],
+  // Adicionado FormsModule aqui para evitar erros de ngModel em componentes filhos ou modais
+  imports: [CommonModule, ReactiveFormsModule, FormsModule, RouterModule],
   templateUrl: './login.component.html',
   styleUrl: './login.component.css'
 })
@@ -19,21 +20,23 @@ export class LoginComponent {
 
   constructor(
     private fb: FormBuilder,
-    private loginService: LoginService, // Centralizado para loginService
+    private loginService: LoginService,
     private router: Router
   ) {
-    // Form para Admin (Mantive caso você ainda use para suporte interno)
+    // Form para Admin
     this.formAdm = this.fb.nonNullable.group({
       email: ['', [Validators.required, Validators.email]],
       senha: ['', [Validators.required]]
     });
 
-    // 🏦 FORM DO CLIENTE (Foco total no CPF)
+    // 🏦 FORM DO CLIENTE (Foco no CPF)
     this.formCliente = this.fb.nonNullable.group({
       cpf: ['', [Validators.required, Validators.minLength(11), Validators.maxLength(11)]],
       senha: ['', [Validators.required]]
     });
   }
+
+
 
   enviarAdm(): void {
     if (this.formAdm.invalid) return;
@@ -41,6 +44,7 @@ export class LoginComponent {
 
     this.loginService.login(this.formAdm.getRawValue()).subscribe({
       next: (res: any) => {
+        // Redireciona Admin para o Welcome
         this.processarSucessoLogin(res, '/welcome');
       },
       error: () => {
@@ -50,7 +54,7 @@ export class LoginComponent {
     });
   }
 
-  // 🛡️ O MÉTODO DO CLIENTE QUE VOCÊ QUERIA
+  // 🛡️ MÉTODO DO CLIENTE CORRIGIDO
   enviarCliente(): void {
     if (this.formCliente.invalid) {
       alert('Por favor, preencha o CPF e a senha corretamente.');
@@ -58,7 +62,6 @@ export class LoginComponent {
     }
 
     this.loading = true;
-    // Extraímos o CPF e Senha direto do formulário reativo
     const { cpf, senha } = this.formCliente.getRawValue();
 
     console.log(`📡 [Bizi Bank] Iniciando autenticação para CPF: ${cpf}...`);
@@ -67,7 +70,7 @@ export class LoginComponent {
       next: (res: any) => {
         console.log('✅ [Login] Credenciais aceitas pelo Java!');
 
-        // Salvamos os dados e navegamos
+        // REDIRECIONAMENTO: Alterado de '/dashboard' para '/transferencia-pix'
         this.processarSucessoLogin(res, '/dashboard');
       },
       error: (err) => {
@@ -83,13 +86,15 @@ export class LoginComponent {
    * Método auxiliar para padronizar o salvamento de sessão
    */
   private processarSucessoLogin(res: any, rotaDestino: string): void {
-    // Limpa lixos de sessões anteriores
+    // Limpa sessões anteriores por segurança (LGPD)
     localStorage.clear();
 
-    // Salva o token
-    localStorage.setItem('token', res.token);
+    // Salva o token JWT retornado pelo Spring Boot
+    if (res.token) {
+      localStorage.setItem('token', res.token);
+    }
 
-    // O objeto de usuário agora usa o CPF como ID (res.cpf vem do seu backend)
+    // Armazena dados básicos do usuário
     const usuarioLogado = {
       id: res.cpf || res.sub,
       nome: res.nome || 'Cliente Bizi',
@@ -98,9 +103,9 @@ export class LoginComponent {
 
     localStorage.setItem('user', JSON.stringify(usuarioLogado));
 
-    console.log('🚀 Sessão preparada. Navegando...');
+    console.log(`🚀 Sessão preparada para ${usuarioLogado.nome}. Navegando para ${rotaDestino}...`);
 
-    // Timeout para garantir que o LocalStorage gravou antes do Guard rodar
+    // Pequeno timeout para garantir a escrita no LocalStorage
     setTimeout(() => {
       this.router.navigate([rotaDestino]);
     }, 100);

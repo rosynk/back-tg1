@@ -1,25 +1,23 @@
 package bizi.com.demo.transferencia;
 
-import java.util.List;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.*;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/transferencias")
-@Tag(name = "Transferência", description = "Endpoints para operações financeiras entre contas")
+@Tag(name = "Transferência", description = "Endpoints para operações financeiras e gestão de extratos")
 public class TransferenciaController {
 
     @Autowired
@@ -27,91 +25,80 @@ public class TransferenciaController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
-    @Operation(summary = "Realizar transferência", description = "Envia valores para uma conta destino. Clientes usam a própria conta; Admins especificam origem.")
-    @ApiResponses(value = { 
-        @ApiResponse(responseCode = "201", description = "Transferência realizada com sucesso", 
-            content = @Content(schema = @Schema(implementation = TransferenciaDto.class))),
-        @ApiResponse(responseCode = "400", description = "Saldo insuficiente, dados inválidos ou fora do horário permitido"),
-        @ApiResponse(responseCode = "401", description = "Usuário não autenticado (Token inválido ou ausente)"),
-        @ApiResponse(responseCode = "403", description = "Acesso negado para o recurso solicitado"),
-        @ApiResponse(responseCode = "404", description = "Conta de origem ou destino não encontrada"),
-        @ApiResponse(responseCode = "500", description = "Erro interno ao processar a transação ou mapear a resposta")
+    @Operation(summary = "Realizar transferência", description = "Executa uma transferência entre contas e gera os registros de transação no extrato.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "201", description = "Transferência realizada com sucesso", content = @Content(schema = @Schema(implementation = TransferenciaDto.class))),
+            @ApiResponse(responseCode = "400", description = "Saldo insuficiente, limite diário excedido ou dados inválidos"),
+            @ApiResponse(responseCode = "403", description = "Horário de TED não permitido ou falta de permissão"),
+            @ApiResponse(responseCode = "404", description = "Conta de destino não encontrada")
     })
-    public ResponseEntity<TransferenciaDto> realizarTransferencia(
-            @Valid @RequestBody TransferenciaDto transferenciaDto) {
-        TransferenciaDto response = transferenciaService.realizarTransferencia(transferenciaDto);
+    public ResponseEntity<TransferenciaDto> realizarTransferencia(@Valid @RequestBody TransferenciaDto dto) {
+        TransferenciaDto response = transferenciaService.realizarTransferencia(dto);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
-    @Operation(summary = "Buscar por ID", description = "Retorna os detalhes de uma transferência específica.")
-    @ApiResponses(value = { 
-        @ApiResponse(responseCode = "200", description = "Transferência encontrada",
-            content = @Content(schema = @Schema(implementation = TransferenciaModel.class))),
-        @ApiResponse(responseCode = "401", description = "Não autenticado"),
-        @ApiResponse(responseCode = "403", description = "Usuário não tem permissão para ver esta transferência"),
-        @ApiResponse(responseCode = "404", description = "ID da transferência não encontrado")
+    @Operation(summary = "Buscar transferência por ID", description = "Retorna os detalhes técnicos de uma transferência específica.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Transferência localizada", content = @Content(schema = @Schema(implementation = TransferenciaModel.class))),
+            @ApiResponse(responseCode = "403", description = "Acesso negado ao tentar visualizar dados de terceiros"),
+            @ApiResponse(responseCode = "404", description = "ID não encontrado")
     })
     public ResponseEntity<TransferenciaModel> buscarPorId(@PathVariable Long id) {
-        TransferenciaModel transferencia = transferenciaService.buscarPorId(id);
-        return ResponseEntity.ok(transferencia);
+        return ResponseEntity.ok(transferenciaService.buscarPorId(id));
     }
 
     @GetMapping("/conta/{idConta}")
     @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
-    @Operation(summary = "Histórico completo da conta", description = "Lista todas as entradas e saídas de uma conta específica.")
-    @ApiResponses(value = { 
-        @ApiResponse(responseCode = "200", description = "Extrato gerado com sucesso"),
-        @ApiResponse(responseCode = "401", description = "Não autenticado"),
-        @ApiResponse(responseCode = "403", description = "Proibido acessar extrato de contas de terceiros"),
-        @ApiResponse(responseCode = "404", description = "Conta não encontrada")
-    })
+    @Operation(summary = "Histórico completo da conta", description = "Lista todas as transferências (enviadas e recebidas) de uma conta específica.")
+    @ApiResponse(responseCode = "200", description = "Lista retornada com sucesso", content = @Content(array = @ArraySchema(schema = @Schema(implementation = TransferenciaModel.class))))
     public ResponseEntity<List<TransferenciaModel>> buscarTodasDaConta(@PathVariable Long idConta) {
-        List<TransferenciaModel> transferencias = transferenciaService.buscarTodasDaConta(idConta);
-        return ResponseEntity.ok(transferencias);
+        return ResponseEntity.ok(transferenciaService.buscarTodasDaConta(idConta));
     }
 
-    @GetMapping("/enviadas/conta/{idConta}")
+    @GetMapping("/exportar/pdf/{idConta}")
     @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
-    @Operation(summary = "Filtrar apenas enviadas", description = "Lista as transferências enviadas por uma conta específica.")
-    @ApiResponses(value = { 
-        @ApiResponse(responseCode = "200", description = "Lista de transferências enviadas retornada"),
-        @ApiResponse(responseCode = "401", description = "Não autenticado"),
-        @ApiResponse(responseCode = "403", description = "Acesso negado (Cliente só pode ver a própria conta)")
-    })
-    public ResponseEntity<List<TransferenciaModel>> buscarEnviadas(@PathVariable Long idConta) {
-        return ResponseEntity.ok(transferenciaService.buscarPorContaOrigem(idConta));
+    @Operation(summary = "Exportar extrato em PDF", description = "Gera um documento PDF formatado com as cores de entrada (Verde) e saída (Rosa).")
+    @ApiResponse(responseCode = "200", description = "Arquivo PDF gerado", content = @Content(mediaType = "application/pdf"))
+    public ResponseEntity<byte[]> exportarPdf(@PathVariable Long idConta) {
+        byte[] pdfData = transferenciaService.gerarPdfExtrato(idConta);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDisposition(ContentDisposition.attachment()
+                .filename("extrato_bizi_" + idConta + ".pdf")
+                .build());
+
+        return new ResponseEntity<>(pdfData, headers, HttpStatus.OK);
     }
 
-    @GetMapping("/recebidas/conta/{idConta}")
+    @GetMapping("/exportar/csv/{idConta}")
     @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
-    @Operation(summary = "Filtrar apenas recebidas", description = "Lista as transferências recebidas por uma conta específica.")
-    @ApiResponses(value = { 
-        @ApiResponse(responseCode = "200", description = "Lista de transferências recebidas retornada"),
-        @ApiResponse(responseCode = "401", description = "Não autenticado"),
-        @ApiResponse(responseCode = "403", description = "Acesso negado (Cliente só pode ver a própria conta)")
-    })
-    public ResponseEntity<List<TransferenciaModel>> buscarRecebidas(@PathVariable Long idConta) {
-        return ResponseEntity.ok(transferenciaService.buscarPorContaDestino(idConta));
-    }
-
-    @GetMapping("/exportar/conta/{idConta}")
-    @PreAuthorize("hasAnyRole('CLIENTE', 'ADMIN')")
-    @Operation(summary = "Exportar para CSV", description = "Gera um arquivo CSV com o histórico de transações da conta.")
-    @ApiResponses(value = { 
-        @ApiResponse(responseCode = "200", description = "CSV gerado com sucesso", 
-            content = @Content(mediaType = "text/csv")),
-        @ApiResponse(responseCode = "401", description = "Não autenticado"),
-        @ApiResponse(responseCode = "403", description = "Proibido exportar dados de terceiros"),
-        @ApiResponse(responseCode = "404", description = "Conta não encontrada")
-    })
-    public ResponseEntity<byte[]> exportarExtrato(@PathVariable Long idConta) {
+    @Operation(summary = "Exportar extrato em CSV", description = "Gera um arquivo CSV para importação em planilhas.")
+    @ApiResponse(responseCode = "200", description = "Arquivo CSV gerado", content = @Content(mediaType = "text/csv"))
+    public ResponseEntity<byte[]> exportarCsv(@PathVariable Long idConta) {
         byte[] csvData = transferenciaService.gerarCsvExtrato(idConta);
-        
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=extrato_bizi_conta_" + idConta + ".csv")
-                .contentType(MediaType.parseMediaType("text/csv"))
-                .body(csvData);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("text/csv"));
+        headers.setContentDisposition(ContentDisposition.attachment()
+                .filename("extrato_bizi_" + idConta + ".csv")
+                .build());
+
+        return new ResponseEntity<>(csvData, headers, HttpStatus.OK);
+    }
+
+    @DeleteMapping("/estorno/{idTransferencia}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Realizar estorno (Admin)", description = "Reverte os saldos e marca a transação como estornada no sistema. Exclusivo para perfis administrativos.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "204", description = "Estorno realizado e registros atualizados"),
+            @ApiResponse(responseCode = "403", description = "Apenas administradores podem executar esta ação"),
+            @ApiResponse(responseCode = "404", description = "Transferência não localizada para estorno")
+    })
+    public ResponseEntity<Void> estornar(@PathVariable Long idTransferencia) {
+        transferenciaService.estornarTransferencia(idTransferencia);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -14,15 +14,34 @@ public class PixDto {
     @Positive(message = "O valor deve ser maior que zero")
     private BigDecimal valor;
 
-    private String mensagem; // Opcional
+    private String mensagem;
 
-    // --- Getters e Setters ---
-    public String getChavePixDestino() { return chavePixDestino; }
-    public void setChavePixDestino(String chavePixDestino) { this.chavePixDestino = chavePixDestino; }
+    // ✅ ADICIONE ESTE CONSTRUTOR VAZIO
+    public PixDto() {
+    }
 
-    public BigDecimal getValor() { return valor; }
-    public void setValor(BigDecimal valor) { this.valor = valor; }
+    // --- Getters e Setters (Mantenha os que você já tem) ---
+    public String getChavePixDestino() {
+        return chavePixDestino;
+    }
 
-    public String getMensagem() { return mensagem; }
-    public void setMensagem(String mensagem) { this.mensagem = mensagem; }
+    public void setChavePixDestino(String chavePixDestino) {
+        this.chavePixDestino = chavePixDestino;
+    }
+
+    public BigDecimal getValor() {
+        return valor;
+    }
+
+    public void setValor(BigDecimal valor) {
+        this.valor = valor;
+    }
+
+    public String getMensagem() {
+        return mensagem;
+    }
+
+    public void setMensagem(String mensagem) {
+        this.mensagem = mensagem;
+    }
 }

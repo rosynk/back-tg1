@@ -54,7 +54,7 @@ public class ContaBancariaModel {
     private List<TransacaoModel> transacoes;
 
     @JsonIgnore
-    @OneToMany(mappedBy = "contaBancaria", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "conta", cascade = CascadeType.ALL)
     private List<ChavePixModel> chavesPix;
 
     // --- GETTERS E SETTERS (Adicione o do numeroConta) ---

@@ -4,32 +4,34 @@ import { Router, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
-
+// --- Interfaces ---
 interface Usuario {
   idUsuario: number;
   nomeCompleto: string;
   cpf: string;
 }
 
-
 interface Transacao {
-  dataHora: string;      // No Java: private LocalDateTime dataHora
-  tipoTransacao: string; // No Java: private TipoTransacao tipoTransacao
-  valor: number;         // No Java: private BigDecimal valor
-  cpfDestino?: string;   // Opcional: para mostrar pra quem ele mandou
+  dataHora: string;
+  tipoTransacao: string;
+  valor: number;
+  cpfDestino?: string;
+  nomeContraparte?: string;
 }
 
 interface Extrato {
-  titular: string; saldoAtual: number; transacoes: Transacao[];
+  titular: string;
+  saldoAtual: number;
+  transacoes: Transacao[];
 }
 
 interface Conta {
   id: number;
-  usuario: Usuario; // Objeto completo vindo do Backend
+  usuario: Usuario;
   tipoConta: string;
   numeroAgencia: string;
   numeroConta: string;
-  saldo: number;    // Adicionado o campo saldo!
+  saldo: number;
 }
 
 @Component({
@@ -61,54 +63,102 @@ export class DashboardComponent implements OnInit {
 
   private readonly API_BASE = 'http://localhost:8086/api';
 
-  // O Constructor deve aparecer apenas UMA vez dentro da classe
   constructor(private http: HttpClient, private router: Router) {}
 
   ngOnInit() {
     this.carregarDados();
   }
 
-  // MÉTODO PARA TESTAR A NAVEGAÇÃO
+  // --- Navegação ---
+  irParaTransacao() {
+    console.log('💸 Navegando para área de transferência...');
+    this.router.navigate(['/transacao']);
+  }
+
   testeNavegacao() {
     console.log("🚀 Botão clicado! Tentando navegar...");
     this.router.navigate(['/transferencia']).then(podeIr => {
-      if(podeIr) {
-        console.log("✅ Rota permitida!");
-      } else {
-        console.error("❌ Rota bloqueada pelo AuthGuard ou não existe!");
-      }
+      if (!podeIr) console.error("❌ Rota bloqueada ou inexistente!");
     });
   }
 
+  // --- Lógica de Dados ---
   carregarDados() {
     this.loading = true;
 
-    // 1. Busca Extrato
-    this.http.get<Transacao[]>(`${this.API_BASE}/transacoes/extrato`).subscribe({
-  next: (data) => {
-    // Criamos o objeto que o seu HTML espera manualmente
-    this.extrato = {
-      titular: this.conta?.usuario?.nomeCompleto || '',
-      saldoAtual: this.conta?.saldo || 0,
-      transacoes: data // 'data' aqui já é a lista List<TransacaoModel> do Java
-    };
-    this.loading = false;
-    console.log('✅ Extrato carregado com', data.length, 'itens');
-  }
-});
-
-    // 2. Busca Conta
+    // 1. Busca Dados da Conta primeiro para ter o saldo atualizado
     this.http.get<Conta[]>(`${this.API_BASE}/contas`).subscribe({
-      next: (data) => {
-        if (data && data.length > 0) {
-          this.conta = data[0];
+      next: (contas) => {
+        if (contas && contas.length > 0) {
+          this.conta = contas[0];
           this.transferenciaData.idContaOrigem = this.conta.id;
+
+          // 2. Só busca o extrato após ter os dados da conta (para evitar undefined no saldo)
+          this.buscarExtrato();
         }
       },
-      error: (err) => console.error('❌ Erro contas', err)
+      error: (err) => this.tratarErro(err)
     });
   }
 
+private buscarExtrato() {
+  this.loading = true;
+
+  // Adicionamos um timestamp (?t=...) para garantir que a requisição vá ao servidor e não ao cache
+  const timestamp = new Date().getTime();
+
+  this.http.get<Transacao[]>(`${this.API_BASE}/transacoes/extrato?t=${timestamp}`).subscribe({
+    next: (data) => {
+      // 1. Criamos a nova lista formatada
+      const transacoesFormatadas = (data || []).map(t => {
+        const tipo = t.tipoTransacao || '';
+        const nome = t.nomeContraparte || t.cpfDestino || 'Destinatário';
+
+        let tituloExibicao = '';
+        const ehSaida = tipo.includes('ENVIADA') || tipo.endsWith('_SAIDA') || tipo.includes('SAQUE') || tipo.includes('PAGAMENTO');
+
+        if (tipo.includes('RECEBIDA')) {
+          tituloExibicao = `Recebido de ${nome}`;
+        } else if (tipo.includes('ENVIADA')) {
+          tituloExibicao = `Transferência para ${nome}`;
+        } else if (tipo.includes('PAGAMENTO')) {
+          tituloExibicao = `Pagamento para ${nome}`;
+        } else if (tipo.includes('SAQUE')) {
+          tituloExibicao = `Saque Realizado`;
+        } else if (tipo.includes('DEPOSITO')) {
+          tituloExibicao = `Depósito em Conta`;
+        } else {
+          tituloExibicao = `Transação: ${nome}`;
+        }
+
+        return {
+          ...t,
+          tituloDinamico: tituloExibicao,
+          valor: ehSaida ? -Math.abs(t.valor) : Math.abs(t.valor)
+        };
+      });
+
+      // 2. Ordenação rigorosa por data e hora (decrescente)
+      transacoesFormatadas.sort((a, b) => {
+        return new Date(b.dataHora).getTime() - new Date(a.dataHora).getTime();
+      });
+
+      // 3. Resetamos o objeto extrato com uma nova referência para o Angular detectar a mudança
+      this.extrato = {
+        titular: this.conta?.usuario?.nomeCompleto || 'Usuário Bizi',
+        saldoAtual: this.conta?.saldo || 0,
+        transacoes: [...transacoesFormatadas] // Usamos o spread operator aqui
+      };
+
+      this.loading = false;
+      console.log('✅ Extrato atualizado com sucesso:', this.extrato.transacoes);
+    },
+    error: (err) => {
+      this.tratarErro(err);
+      this.loading = false;
+    }
+  });
+}
   enviarTransferencia() {
     if (!this.transferenciaData.valor || this.transferenciaData.valor <= 0) {
       this.msgErro = 'Informe um valor válido.';
@@ -124,7 +174,7 @@ export class DashboardComponent implements OnInit {
         this.msgSucesso = 'Transferência realizada com sucesso!';
         this.loadingTransfer = false;
         this.limparFormulario();
-        this.carregarDados();
+        this.carregarDados(); // Recarrega saldo e lista
       },
       error: (err) => {
         this.msgErro = err.error?.mensagem || 'Erro na transferência.';
@@ -140,10 +190,13 @@ export class DashboardComponent implements OnInit {
   }
 
   private tratarErro(err: any) {
+    console.error('❌ Erro capturado:', err);
+    this.loading = false;
     if (err.status === 403 || err.status === 401) {
+      // Resolve o erro Forbidden da imagem fffffffff.png
       this.router.navigate(['/login']);
     } else {
-      this.erro = 'Erro ao carregar dados.';
+      this.erro = 'Erro ao carregar dados do servidor.';
     }
   }
-} // <--- Fim da Classe (Certifique-se de que nada ficou fora daqui)
+} // Fim da Classe

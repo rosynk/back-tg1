@@ -1,11 +1,12 @@
 import { Injectable, PLATFORM_ID, Inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { BehaviorSubject, Observable, throwError } from 'rxjs';
-import { tap, catchError } from 'rxjs/operators';
+import { BehaviorSubject, Observable } from 'rxjs';
+import { tap } from 'rxjs/operators';
 import { isPlatformBrowser } from '@angular/common';
 
+// Interface do Usuário alinhada com o seu projeto Bizi Banco
 export interface User {
-  id: string;   // Mantido como string para suportar CPF e Email
+  id: string;   // CPF ou ID único
   email: string;
   nome: string;
   role: string;
@@ -15,6 +16,7 @@ export interface User {
 export class AuthService {
   private apiUrl = 'http://localhost:8086/api/auth';
 
+  // Subject que mantém o estado do usuário na memória da aplicação
   private currentUserSubject = new BehaviorSubject<User | null>(null);
   public currentUser$ = this.currentUserSubject.asObservable();
 
@@ -22,27 +24,45 @@ export class AuthService {
     private http: HttpClient,
     @Inject(PLATFORM_ID) private platformId: Object
   ) {
+    // Ao iniciar o serviço, tenta recuperar a sessão do navegador
     if (isPlatformBrowser(this.platformId)) {
       this.loadUser();
     }
   }
 
-  login(email: string, senha: string): Observable<any> {
-    return this.http.post<any>(`${this.apiUrl}/login`, { email, senha }).pipe(
-      tap(response => {
-        if (response && response.token) {
-          this.setSession(response.token);
+  buscarDadosPerfil(): Observable<User> {
+  return this.http.get<User>(`${this.apiUrl}/me`).pipe(
+    tap(user => {
+      // Atualiza o Subject. Todas as telas (Pix, TED) que "ouvem" o currentUser$
+      // serão atualizadas automaticamente com "Jose da Paixao"
+      this.currentUserSubject.next(user);
+    })
+  );
+}
+
+  /**
+   * Getter para facilitar o acesso síncrono ao usuário no AuthGuard
+   */
+  public get usuarioAtual(): User | null {
+    return this.currentUserSubject.value;
+  }
+
+  /**
+   * Realiza o login enviando CPF e Senha para o backend Java
+   */
+  login(cpf: string, senha: string): Observable<any> {
+    return this.http.post<any>(`${this.apiUrl}/login`, { cpf, senha }).pipe(
+      tap(res => {
+        if (res && res.token) {
+          console.log('✅ [AuthService] Sucesso! Iniciando sessão.');
+          this.setSession(res.token);
         }
-      }),
-      catchError(err => {
-        console.error('❌ Erro no processo de login:', err);
-        return throwError(() => err);
       })
     );
   }
 
   /**
-   * Centraliza a gravação do token e decodificação do usuário
+   * Salva o token e processa os dados do usuário
    */
   private setSession(token: string): void {
     if (isPlatformBrowser(this.platformId)) {
@@ -51,32 +71,22 @@ export class AuthService {
     }
   }
 
+  /**
+   * Decodifica o JWT e preenche o Subject com os dados do usuário
+   */
   private decodeAndSetUser(token: string): void {
     try {
       const parts = token.split('.');
       if (parts.length !== 3) throw new Error('JWT malformatado');
 
-      // Decodifica o payload (Base64)
+      // Decodifica o payload (parte central do JWT)
       const payload = JSON.parse(atob(parts[1]));
 
-      console.log('🔍 Debug Payload JWT:', payload);
-
-      /**
-       * 🔥 ESTRATÉGIA ANTI-QUEBRA:
-       * 1. Prioriza o CPF (id para transações bancárias)
-       * 2. Fallback para o SUB (email) caso o CPF não exista (ex: Admin)
-       */
-      const userId = payload.cpf || payload.sub;
-
-      if (!userId) {
-        throw new Error('Identificador de usuário não encontrado no token');
-      }
-
       const user: User = {
-        id: String(userId),
-        email: payload.sub, // O e-mail geralmente vem no 'sub'
-        nome: payload.nome || 'Usuário',
-        role: payload.role || payload.roles || ''
+        id: String(payload.cpf || payload.sub),
+        email: payload.sub,
+        nome: payload.nome || 'Usuário Bizi',
+        role: payload.role || payload.roles || 'USER'
       };
 
       this.currentUserSubject.next(user);
@@ -84,45 +94,70 @@ export class AuthService {
       if (isPlatformBrowser(this.platformId)) {
         localStorage.setItem('user', JSON.stringify(user));
       }
-
-      console.log('✅ Usuário autenticado com ID:', user.id);
-
     } catch (error) {
-      console.error('⚠️ Falha crítica ao processar token:', error);
-      this.logout(); // Limpa tudo para evitar estado inconsistente
+      console.error('⚠️ Falha ao processar token:', error);
+      this.logout();
     }
   }
 
+  /**
+   * Carrega o usuário do localStorage (útil após refresh F5)
+   */
   private loadUser(): void {
     const token = this.getToken();
-    if (token) {
+    if (token && !this.tokenExpirado(token)) {
       this.decodeAndSetUser(token);
     }
   }
 
-  getToken(): string | null {
-    if (isPlatformBrowser(this.platformId)) {
-      return localStorage.getItem('token');
+  /**
+   * Valida se o token JWT ainda é válido temporalmente
+   */
+  public tokenExpirado(token: string): boolean {
+    if (!token) return true;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const expirationDate = payload.exp * 1000; // Converte para milissegundos
+      return Date.now() > expirationDate;
+    } catch {
+      return true;
     }
-    return null;
   }
 
-  isAuthenticated(): boolean {
-  const token = this.getToken();
-  if (!token) return false;
-
-  // Se o token existe mas o usuário sumiu do Subject (comum em redirects rápidos)
-  if (!this.currentUserSubject.value) {
-    this.decodeAndSetUser(token); // Tenta recuperar na hora
+  /**
+   * Método de "reidratação" exigido pelo seu AuthGuard
+   */
+  public reidratarUsuario(): boolean {
+    const token = this.getToken();
+    if (token && !this.tokenExpirado(token)) {
+      this.decodeAndSetUser(token);
+      return true;
+    }
+    return false;
   }
 
-  return !!this.currentUserSubject.value;
-}
-
-  getCurrentUser(): User | null {
-    return this.currentUserSubject.value;
+  public getToken(): string | null {
+    return isPlatformBrowser(this.platformId) ? localStorage.getItem('token') : null;
   }
 
+  /**
+   * Verifica se o usuário está logado e com token válido
+   */
+  public isAuthenticated(): boolean {
+    const token = this.getToken();
+    if (!token || this.tokenExpirado(token)) {
+      return false;
+    }
+    // Se o token é válido mas o Subject está vazio, reidrata
+    if (!this.currentUserSubject.value) {
+      this.decodeAndSetUser(token);
+    }
+    return !!this.currentUserSubject.value;
+  }
+
+  /**
+   * Limpa a sessão e limpa os dados do navegador
+   */
   logout(): void {
     if (isPlatformBrowser(this.platformId)) {
       localStorage.removeItem('token');

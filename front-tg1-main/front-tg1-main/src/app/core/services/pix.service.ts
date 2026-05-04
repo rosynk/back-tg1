@@ -2,52 +2,33 @@ import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-export interface Pix {
-  id?: number;
-  contaOrigem: number;
-  chaveDestino: string;
-  valor: number;
-  descricao: string;
-  dataPix?: string;
-}
-
-export interface ChavePix {
-  id?: number;
-  usuario: number;
-  tipo: string; // CPF, CNPJ, EMAIL, TELEFONE, ALEATORIA
-  chave: string;
-  dataCriacao?: string;
-}
-
 @Injectable({
   providedIn: 'root'
 })
 export class PixService {
-  private apiUrl = 'http://localhost:8086/api/pix';
+  private readonly API_CHAVES = 'http://localhost:8086/api/chaves-pix';
+  private readonly API_OPERACAO = 'http://localhost:8086/api/pix'; // ✅ Rota do PixController
 
   constructor(private http: HttpClient) {}
 
-  enviarPix(pix: Pix): Observable<Pix> {
-    return this.http.post<Pix>(this.apiUrl, pix);
+  // Renomeado para coincidir com a chamada do Componente
+  realizarTransferencia(dados: any): Observable<any> {
+    return this.http.post<any>(`${this.API_OPERACAO}/transferir`, dados);
   }
 
-  buscarPixPorId(id: number): Observable<Pix> {
-    return this.http.get<Pix>(`${this.apiUrl}/${id}`);
+  getContaInfo(): Observable<any> {
+    return this.http.get<any>(`${this.API_OPERACAO}/conta`);
   }
 
-  buscarPixDaConta(idConta: number): Observable<Pix[]> {
-    return this.http.get<Pix[]>(`${this.apiUrl}/conta/${idConta}`);
+  listarChaves(): Observable<any> {
+    return this.http.get(`${this.API_CHAVES}/chaves`);
   }
 
-  criarChavePix(chave: ChavePix): Observable<ChavePix> {
-    return this.http.post<ChavePix>(`${this.apiUrl}/chaves`, chave);
+  cadastrarChavePix(dados: any): Observable<any> {
+    return this.http.post(this.API_CHAVES, dados);
   }
 
-  listarChavesDoUsuario(idUsuario: number): Observable<ChavePix[]> {
-    return this.http.get<ChavePix[]>(`${this.apiUrl}/chaves/usuario/${idUsuario}`);
-  }
-
-  deletarChavePix(id: number): Observable<void> {
-    return this.http.delete<void>(`${this.apiUrl}/chaves/${id}`);
+  excluirChave(id: number): Observable<any> {
+    return this.http.delete(`${this.API_CHAVES}/${id}`);
   }
 }

@@ -2,30 +2,33 @@ package bizi.com.demo.pix;
 
 import bizi.com.demo.transacao.TransacaoModel;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.NoArgsConstructor;
 
-@Entity
-@Table(name = "pix_envios")
-public class PixModel {   
+@Entity // Faltava essa anotação para o Spring reconhecer como tabela
+@Table(name = "pix_operacoes")
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class PixModel {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id_pix")
     private Long id;
 
+    // Relacionamento com a transação genérica (extrato)
     @OneToOne
     @JoinColumn(name = "id_transacao", nullable = false)
     private TransacaoModel transacao;
 
-    @Column(name = "chave_pix_destino", nullable = false)
+    // Campo que o seu PixService.java está tentando acessar
+    @Column(name = "chave_destino", nullable = false)
     private String chavePixDestino;
 
-    @Column(name = "mensagem")
-    private String mensagem; 
+    private String mensagem;
 
-    public PixModel() {}
-
-    // --- Getters e Setters ---
-
+    // Getters e Setters manuais para garantir que o VS Code encontre
     public Long getId() {
         return id;
     }
