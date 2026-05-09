@@ -34,6 +34,9 @@ public class UsuarioModel implements UserDetails {
     @JoinColumn(name = "endereco_id", nullable = true)
     private EnderecoModel endereco;
 
+    @Column(nullable = false)
+    private boolean ativo = false;
+
     @Column(unique = true)
     private String email;
 
@@ -68,6 +71,12 @@ public class UsuarioModel implements UserDetails {
 
     @OneToMany(mappedBy = "responsavel", cascade = CascadeType.ALL)
     private List<UsuarioModel> dependentes;
+
+    @Column(name = "url_selfie")
+    private String urlSelfie;
+
+    @Column(name = "url_rg_frente")
+    private String urlRgFrente;
 
     // --- MÉTODOS OBRIGATÓRIOS USERDETAILS (CORRIGIDOS) ---
 
@@ -245,4 +254,47 @@ public class UsuarioModel implements UserDetails {
     public void setDataExpiracaoCodigo(LocalDateTime dataExpiracaoCodigo) {
         this.dataExpiracaoCodigo = dataExpiracaoCodigo;
     }
+
+    /**
+     * @return boolean return the ativo
+     */
+    public boolean isAtivo() {
+        return ativo;
+    }
+
+    /**
+     * @param ativo the ativo to set
+     */
+    public void setAtivo(boolean ativo) {
+        this.ativo = ativo;
+    }
+
+    /**
+     * @return String return the urlSelfie
+     */
+    public String getUrlSelfie() {
+        return urlSelfie;
+    }
+
+    /**
+     * @param urlSelfie the urlSelfie to set
+     */
+    public void setUrlSelfie(String urlSelfie) {
+        this.urlSelfie = urlSelfie;
+    }
+
+    /**
+     * @return String return the urlRgFrente
+     */
+    public String getUrlRgFrente() {
+        return urlRgFrente;
+    }
+
+    /**
+     * @param urlRgFrente the urlRgFrente to set
+     */
+    public void setUrlRgFrente(String urlRgFrente) {
+        this.urlRgFrente = urlRgFrente;
+    }
+
 }

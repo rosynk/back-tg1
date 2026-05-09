@@ -15,7 +15,7 @@ public class PropostaRequestDto {
     private String cpf;
 
     @NotNull(message = "Data de nascimento é obrigatória")
-    private LocalDate dataNascimento; // Campo necessário para a validação de idade
+    private LocalDate dataNascimento;
 
     @Email(message = "Email inválido")
     private String email;
@@ -33,33 +33,178 @@ public class PropostaRequestDto {
 
     private Role role;
 
-    public PropostaRequestDto() {}
+    // ✅ Novos campos para Documentação
+    @NotBlank(message = "URL do RG Frente é obrigatória")
+    private String urlRgFrente;
 
-    // Getters e Setters
-    public String getNomeCompleto() { return nomeCompleto; }
-    public void setNomeCompleto(String nomeCompleto) { this.nomeCompleto = nomeCompleto; }
+    @NotBlank(message = "URL do RG Verso é obrigatória")
+    private String urlRgVerso;
 
-    public String getCpf() { return cpf; }
-    public void setCpf(String cpf) { this.cpf = cpf; }
+    @NotBlank(message = "URL do Comprovante de Residência é obrigatória")
+    private String urlComprovanteResidencia;
 
-    public LocalDate getDataNascimento() { return dataNascimento; }
-    public void setDataNascimento(LocalDate dataNascimento) { this.dataNascimento = dataNascimento; }
+    @NotBlank(message = "URL da Selfie é obrigatória")
+    private String urlSelfie;
 
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
+    public PropostaRequestDto() {
+    }
 
-    public String getTelefone() { return telefone; }
-    public void setTelefone(String telefone) { this.telefone = telefone; }
+    public String getUrlRgFrente() {
+        return urlRgFrente;
+    }
 
-    public String getSenha() { return senha; }
-    public void setSenha(String senha) { this.senha = senha; }
+    public void setUrlRgFrente(String urlRgFrente) {
+        this.urlRgFrente = urlRgFrente;
+    }
 
-    public EnderecoModel getEndereco() { return endereco; }
-    public void setEndereco(EnderecoModel endereco) { this.endereco = endereco; }
+    public String getUrlRgVerso() {
+        return urlRgVerso;
+    }
 
-    public TipoConta getTipoConta() { return tipoConta; }
-    public void setTipoConta(TipoConta tipoConta) { this.tipoConta = tipoConta; }
+    public void setUrlRgVerso(String urlRgVerso) {
+        this.urlRgVerso = urlRgVerso;
+    }
 
-    public Role getRole() { return role; }
-    public void setRole(Role role) { this.role = role; }
+    public String getUrlComprovanteResidencia() {
+        return urlComprovanteResidencia;
+    }
+
+    public void setUrlComprovanteResidencia(String urlComprovanteResidencia) {
+        this.urlComprovanteResidencia = urlComprovanteResidencia;
+    }
+
+    public String getUrlSelfie() {
+        return urlSelfie;
+    }
+
+    public void setUrlSelfie(String urlSelfie) {
+        this.urlSelfie = urlSelfie;
+    }
+
+    /**
+     * @return String return the nomeCompleto
+     */
+    public String getNomeCompleto() {
+        return nomeCompleto;
+    }
+
+    /**
+     * @param nomeCompleto the nomeCompleto to set
+     */
+    public void setNomeCompleto(String nomeCompleto) {
+        this.nomeCompleto = nomeCompleto;
+    }
+
+    /**
+     * @return String return the cpf
+     */
+    public String getCpf() {
+        return cpf;
+    }
+
+    /**
+     * @param cpf the cpf to set
+     */
+    public void setCpf(String cpf) {
+        this.cpf = cpf;
+    }
+
+    /**
+     * @return LocalDate return the dataNascimento
+     */
+    public LocalDate getDataNascimento() {
+        return dataNascimento;
+    }
+
+    /**
+     * @param dataNascimento the dataNascimento to set
+     */
+    public void setDataNascimento(LocalDate dataNascimento) {
+        this.dataNascimento = dataNascimento;
+    }
+
+    /**
+     * @return String return the email
+     */
+    public String getEmail() {
+        return email;
+    }
+
+    /**
+     * @param email the email to set
+     */
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    /**
+     * @return String return the telefone
+     */
+    public String getTelefone() {
+        return telefone;
+    }
+
+    /**
+     * @param telefone the telefone to set
+     */
+    public void setTelefone(String telefone) {
+        this.telefone = telefone;
+    }
+
+    /**
+     * @return String return the senha
+     */
+    public String getSenha() {
+        return senha;
+    }
+
+    /**
+     * @param senha the senha to set
+     */
+    public void setSenha(String senha) {
+        this.senha = senha;
+    }
+
+    /**
+     * @return EnderecoModel return the endereco
+     */
+    public EnderecoModel getEndereco() {
+        return endereco;
+    }
+
+    /**
+     * @param endereco the endereco to set
+     */
+    public void setEndereco(EnderecoModel endereco) {
+        this.endereco = endereco;
+    }
+
+    /**
+     * @return TipoConta return the tipoConta
+     */
+    public TipoConta getTipoConta() {
+        return tipoConta;
+    }
+
+    /**
+     * @param tipoConta the tipoConta to set
+     */
+    public void setTipoConta(TipoConta tipoConta) {
+        this.tipoConta = tipoConta;
+    }
+
+    /**
+     * @return Role return the role
+     */
+    public Role getRole() {
+        return role;
+    }
+
+    /**
+     * @param role the role to set
+     */
+    public void setRole(Role role) {
+        this.role = role;
+    }
+
 }

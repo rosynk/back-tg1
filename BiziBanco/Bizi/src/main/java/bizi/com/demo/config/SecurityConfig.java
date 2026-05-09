@@ -59,6 +59,8 @@ public class SecurityConfig {
                                 "/error")
                         .permitAll()
 
+                        .requestMatchers("/uploads/**").permitAll()
+
                         // ADICIONE/MANTENHA ESTAS LINHAS AQUI:
                         .requestMatchers(
                                 "/swagger-ui/**",
