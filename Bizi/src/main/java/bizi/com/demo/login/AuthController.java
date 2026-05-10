@@ -1,6 +1,10 @@
 package bizi.com.demo.login;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.DisabledException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -66,5 +70,15 @@ public class AuthController {
     public ResponseEntity<String> redefinirSenha(@RequestBody @Valid RedefinirSenhaDto dto) {
         authService.redefinirSenha(dto.email(), dto.codigo(), dto.novaSenha());
         return ResponseEntity.ok("Senha atualizada com sucesso.");
+    }
+    
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<String> handleDisabled(DisabledException e) {
+        return ResponseEntity.status(403).body(e.getMessage());
+    }
+
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<String> handleBadCredentials(BadCredentialsException e) {
+        return ResponseEntity.status(403).body("CPF ou senha incorretos.");
     }
 }
