@@ -79,6 +79,8 @@ public class SecurityConfig {
                         .hasAnyAuthority("ROLE_CLIENTE", "ROLE_ADMIN")
 
                         .requestMatchers("/api/dependentes/**").hasAuthority("ROLE_FILHO")
+                        
+                        .requestMatchers("/api/propostas/**").hasAuthority("ROLE_ADMIN")
 
                         // 3. QUALQUER OUTRA ROTA
                         .anyRequest().authenticated())

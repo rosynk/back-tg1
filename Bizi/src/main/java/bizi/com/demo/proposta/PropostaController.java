@@ -34,7 +34,7 @@ public class PropostaController {
         @PostMapping(value = "/proposta", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
         @Operation(summary = "Submeter nova proposta com documentos", description = "Recebe o objeto JSON 'dados' com as informações cadastrais e os arquivos físicos de imagem. "
                         +
-                        "As imagens são persistidas no storage local e as referências salvas no banco de dados.")
+                          "As imagens são persistidas no storage local e as referências salvas no banco de dados.")
         @ApiResponses(value = {
                         @ApiResponse(responseCode = "201", description = "Proposta criada com sucesso", content = @Content(schema = @Schema(implementation = PropostaResponseDto.class))),
                         @ApiResponse(responseCode = "400", description = "Erro de validação nos dados enviados ou idade insuficiente"),
