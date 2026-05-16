@@ -81,6 +81,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/dependentes/**").hasAuthority("ROLE_FILHO")
                         
                         .requestMatchers("/api/propostas/**").hasAuthority("ROLE_ADMIN")
+                        
+                        .requestMatchers("/api/documentos/**").permitAll()
 
                         // 3. QUALQUER OUTRA ROTA
                         .anyRequest().authenticated())

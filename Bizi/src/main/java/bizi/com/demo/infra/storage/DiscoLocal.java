@@ -68,4 +68,8 @@ public class DiscoLocal implements Disco {
             throw new RuntimeException("Erro ao deletar arquivo.");
         }
     }
+    
+    public String getRaiz() {
+        return this.raiz;
+    }
 }
