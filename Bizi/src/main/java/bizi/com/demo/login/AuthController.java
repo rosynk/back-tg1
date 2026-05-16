@@ -1,10 +1,10 @@
 package bizi.com.demo.login;
 
+import bizi.com.demo.usuario.UsuarioRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-
 import org.springframework.web.bind.annotation.*;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -19,35 +19,26 @@ import jakarta.validation.Valid;
 public class AuthController {
 
     private final AuthService authService;
+    private final UsuarioRepository usuarioRepository;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, UsuarioRepository usuarioRepository) {
         this.authService = authService;
+        this.usuarioRepository = usuarioRepository;
     }
 
-    @Operation(summary = "Login padrão", description = "Autentica o usuário e retorna um token JWT")
+    @Operation(summary = "Login padrão", description = "Autentica o usuário e retorna um token JWT com a role")
     @ApiResponses(value = {
             @ApiResponse(responseCode = "200", description = "Login realizado com sucesso"),
-            @ApiResponse(responseCode = "403", description = "CPF ou senha incorretos"), // Atualizado para CPF
+            @ApiResponse(responseCode = "403", description = "CPF ou senha incorretos"),
             @ApiResponse(responseCode = "400", description = "Dados de entrada inválidos")
     })
     @PostMapping("/login")
     public ResponseEntity<TokenResponseDto> login(@RequestBody @Valid LoginDto loginDto) {
         String token = authService.autenticar(loginDto);
-        return ResponseEntity.ok(new TokenResponseDto(token));
-    }
-
-    @Operation(summary = "Login específico para a plataforma do cliente")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Login realizado com sucesso"),
-            @ApiResponse(responseCode = "403", description = "CPF ou senha incorretos"), // Atualizado para CPF
-            @ApiResponse(responseCode = "400", description = "Dados de entrada inválidos")
-    })
-    @PostMapping("/loginCliente")
-    public ResponseEntity<TokenResponseDto> loginCliente(@RequestBody @Valid LoginDto loginDto) {
-        // O @RequestBody é essencial para converter o JSON do Angular no seu Record
-        // LoginDto
-        String token = authService.autenticar(loginDto);
-        return ResponseEntity.ok(new TokenResponseDto(token));
+        String role = usuarioRepository.findByCpf(loginDto.cpf())
+                .map(u -> u.getRole().name())
+                .orElse("ROLE_CLIENTE");
+        return ResponseEntity.ok(new TokenResponseDto(token, role));
     }
 
     @Operation(summary = "Gera código de recuperação e envia via e-mail")
@@ -71,7 +62,7 @@ public class AuthController {
         authService.redefinirSenha(dto.email(), dto.codigo(), dto.novaSenha());
         return ResponseEntity.ok("Senha atualizada com sucesso.");
     }
-    
+
     @ExceptionHandler(DisabledException.class)
     public ResponseEntity<String> handleDisabled(DisabledException e) {
         return ResponseEntity.status(403).body(e.getMessage());

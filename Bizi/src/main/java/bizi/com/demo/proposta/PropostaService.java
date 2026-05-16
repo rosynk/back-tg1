@@ -1,5 +1,6 @@
 package bizi.com.demo.proposta;
 
+import bizi.com.demo.comunicacao.ComunicacaoService;
 import bizi.com.demo.contaBancaria.ContaBancariaDto;
 import bizi.com.demo.contaBancaria.ContaBancariaModel;
 import bizi.com.demo.contaBancaria.ContaBancariaService;
@@ -21,6 +22,8 @@ import java.time.Period;
 
 @Service
 public class PropostaService {
+	@Autowired
+	private ComunicacaoService comunicacaoService;
 
     @Autowired
     private UsuarioService usuarioService;
@@ -93,6 +96,8 @@ public class PropostaService {
             registrarProposta(dto, StatusProposta.PENDENTE, "Aguardando validação", 600,
                     caminhoSelfie, caminhoRg, caminhoRgVerso, caminhoComprovante);
 
+            comunicacaoService.enviarEmailBoasVindas(dto.getEmail(), dto.getNomeCompleto());
+
             return new PropostaResponseDto(
                     usuarioSalvo.getId(),
                     contaSalva.getId(),
@@ -122,6 +127,8 @@ public class PropostaService {
                 urlSelfie);
         propostaRepository.save(proposta);
     }
+    
+  
     
     
     @Transactional

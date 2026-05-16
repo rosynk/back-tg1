@@ -33,17 +33,12 @@ public class PropostaRequestDto {
 
     private Role role;
 
-    // ✅ Novos campos para Documentação
-    @NotBlank(message = "URL do RG Frente é obrigatória")
     private String urlRgFrente;
 
-    @NotBlank(message = "URL do RG Verso é obrigatória")
     private String urlRgVerso;
 
-    @NotBlank(message = "URL do Comprovante de Residência é obrigatória")
     private String urlComprovanteResidencia;
-
-    @NotBlank(message = "URL da Selfie é obrigatória")
+    
     private String urlSelfie;
 
     public PropostaRequestDto() {

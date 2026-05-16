@@ -1,6 +1,7 @@
 package bizi.com.demo.login;
 
 import bizi.com.demo.usuario.UsuarioModel;
+
 import bizi.com.demo.usuario.UsuarioRepository;
 import bizi.com.demo.comunicacao.ComunicacaoService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +10,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.security.authentication.BadCredentialsException;
 
 import java.time.LocalDateTime;
 import java.util.Random;
@@ -35,20 +37,24 @@ public class AuthService {
      * Realiza a autenticação via Spring Security usando CPF e gera o Token JWT
      */
     public String autenticar(LoginDto dto) {
-        // 1. Tenta autenticar no Spring Security
-        var usernamePassword = new UsernamePasswordAuthenticationToken(dto.cpf(), dto.senha());
-        var auth = this.authenticationManager.authenticate(usernamePassword);
-
-        // 2. ✅ CORREÇÃO DO ERRO 500:
-        // Em vez de fazer Cast do Principal, buscamos o UsuarioModel direto do banco
-        // pelo CPF
-        // Isso garante que o TokenService receba o objeto correto (UsuarioModel)
+        // Busca o usuário antes de autenticar para checar a role
         UsuarioModel usuario = usuarioRepository.findByCpf(dto.cpf())
-                .orElseThrow(() -> new RuntimeException("Erro ao carregar dados do usuário após autenticação."));
+                .orElseThrow(() -> new RuntimeException("CPF não encontrado."));
+
+        // ADMINs não precisam de aprovação — autenticação direta
+        if (usuario.getRole().name().equals("ROLE_ADMIN")) {
+            // Força autenticação sem passar pelo isEnabled()
+            if (!passwordEncoder.matches(dto.senha(), usuario.getSenha())) {
+                throw new BadCredentialsException("CPF ou senha incorretos.");
+            }
+        } else {
+            // Clientes passam pelo fluxo normal (checa isEnabled/ativo)
+            var token = new UsernamePasswordAuthenticationToken(dto.cpf(), dto.senha());
+            this.authenticationManager.authenticate(token);
+        }
 
         return tokenService.gerarToken(usuario);
     }
-
     /**
      * Recuperação por e-mail
      */
