@@ -150,6 +150,34 @@ public class UsuarioService {
         
         return usuarioRepository.save(usuarioExistente);
     }
+    
+    public void atualizarEndereco(Long idUsuario, EnderecoModel enderecoDto) {
+        UsuarioModel usuario = buscarPorId(idUsuario);
+
+        EnderecoModel endereco = usuario.getEndereco();
+        if (endereco == null) {
+            endereco = new EnderecoModel();
+        }
+
+        if (enderecoDto.getRua() != null)         endereco.setRua(enderecoDto.getRua());
+        if (enderecoDto.getNumero() != null)      endereco.setNumero(enderecoDto.getNumero());
+        if (enderecoDto.getComplemento() != null) endereco.setComplemento(enderecoDto.getComplemento());
+        if (enderecoDto.getBairro() != null)      endereco.setBairro(enderecoDto.getBairro());
+        if (enderecoDto.getCidade() != null)      endereco.setCidade(enderecoDto.getCidade());
+        if (enderecoDto.getEstado() != null)      endereco.setEstado(enderecoDto.getEstado());
+        if (enderecoDto.getCep() != null)         endereco.setCep(enderecoDto.getCep());
+
+        EnderecoModel enderecoSalvo = enderecoRepository.save(endereco);
+        usuario.setEndereco(enderecoSalvo);
+        usuarioRepository.save(usuario);
+    }
+
+    public void atualizarContato(Long idUsuario, ContatoDto contatoDto) {
+        UsuarioModel usuario = buscarPorId(idUsuario);
+        if (contatoDto.getEmail() != null)    usuario.setEmail(contatoDto.getEmail());
+        if (contatoDto.getTelefone() != null) usuario.setTelefone(contatoDto.getTelefone());
+        usuarioRepository.save(usuario);
+    }
 
     /**
      * Deleta um usuário por ID

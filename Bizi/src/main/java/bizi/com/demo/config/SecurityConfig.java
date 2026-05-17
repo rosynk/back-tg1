@@ -100,7 +100,7 @@ public class SecurityConfig {
         // padrão.
         config.setAllowedOrigins(List.of("http://localhost:4200", "http://127.0.0.1:4200"));
 
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")); 
 
         // Liberando todos os headers para evitar que o Interceptor do Angular seja
         // barrado

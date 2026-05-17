@@ -1,11 +1,22 @@
 package bizi.com.demo.usuario;
 
 import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
+import bizi.com.demo.endereco.EnderecoModel;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -141,5 +152,33 @@ public class UsuarioController {
         public ErrorMessage(String message) { this.message = message; }
         public String getMessage() { return message; }
         public void setMessage(String message) { this.message = message; }
+    }
+    
+    @PatchMapping("/meu-perfil/endereco")
+    @PreAuthorize("hasAnyRole('ROLE_CLIENTE', 'ROLE_ADMIN')")
+    @Operation(summary = "Atualizar endereço do perfil logado")
+    public ResponseEntity<?> atualizarEndereco(
+            @AuthenticationPrincipal UsuarioModel usuarioLogado,
+            @RequestBody EnderecoModel enderecoDto) {
+        try {
+            usuarioService.atualizarEndereco(usuarioLogado.getId(), enderecoDto);
+            return ResponseEntity.ok(new ErrorMessage("Endereço atualizado com sucesso."));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ErrorMessage(e.getMessage()));
+        }
+    }
+
+    @PatchMapping("/meu-perfil/contato")
+    @PreAuthorize("hasAnyRole('ROLE_CLIENTE', 'ROLE_ADMIN')")
+    @Operation(summary = "Atualizar contato do perfil logado")
+    public ResponseEntity<?> atualizarContato(
+            @AuthenticationPrincipal UsuarioModel usuarioLogado,
+            @RequestBody ContatoDto contatoDto) {
+        try {
+            usuarioService.atualizarContato(usuarioLogado.getId(), contatoDto);
+            return ResponseEntity.ok(new ErrorMessage("Contato atualizado com sucesso."));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ErrorMessage(e.getMessage()));
+        }
     }
 }

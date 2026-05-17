@@ -23,12 +23,4 @@ public class WebConfig implements WebMvcConfigurer {
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations("file:" + path);
     }
-
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        // Libera o Angular (porta 4200) para acessar o Spring (8086)
-        registry.addMapping("/**")
-                .allowedOrigins("http://localhost:4200")
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS");
-    }
 }
