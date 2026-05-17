@@ -30,7 +30,8 @@ public class TokenService {
                     .withIssuer(ISSUER)
                     .withSubject(usuario.getEmail())
                     .withClaim("role", finalRole)
-                    .withClaim("cpf", usuario.getCpf()) // 🔥 AGORA O CPF ESTÁ NO TOKEN
+                    .withClaim("cpf", usuario.getCpf()) 
+                    .withClaim("telefone", usuario.getTelefone())
                     .withExpiresAt(dataExpiracao())
                     .sign(algoritmo);
         } catch (JWTCreationException exception) {

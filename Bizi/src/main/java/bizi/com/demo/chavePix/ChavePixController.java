@@ -30,14 +30,14 @@ public class ChavePixController {
             @ApiResponse(responseCode = "200", description = "Chave criada com sucesso", content = @Content(schema = @Schema(implementation = ChavePixApiResponse.class))),
             @ApiResponse(responseCode = "400", description = "Erro na requisição ou chave duplicada", content = @Content(schema = @Schema(implementation = ChavePixApiResponse.class)))
     })
+    
     @PostMapping
     public ResponseEntity<ChavePixApiResponse> cadastrar(
             @AuthenticationPrincipal UsuarioModel usuarioLogado,
             @RequestBody ChavePixDto dto) {
         try {
-            Long contaIdReal = service.buscarIdContaPorUsuario(usuarioLogado.getCpf());
-            var novaChave = service.cadastrarChave(contaIdReal, dto.tipo(), dto.valor());
-
+            Long contaId = service.buscarIdContaPorUsuario(usuarioLogado.getCpf());
+            var novaChave = service.cadastrarChave(contaId, dto.tipo(), usuarioLogado);
             return ResponseEntity.ok(new ChavePixApiResponse(true, "Chave cadastrada!", novaChave));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)

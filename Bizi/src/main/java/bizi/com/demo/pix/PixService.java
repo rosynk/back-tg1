@@ -73,15 +73,10 @@ public class PixService {
 
         resumo.put("saldo", conta.getSaldo());
         resumo.put("numeroConta", conta.getNumeroConta());
-        resumo.put("agencia", conta.getNumeroAgencia());
+        resumo.put("numeroAgencia", conta.getNumeroAgencia());
         resumo.put("extrato", conta.getTransacoes());
 
         return resumo;
-    }
-
-    public Object realizarPix(Object dadosTransferencia) {
-        // Implemente aqui a lógica de débito na conta de origem e crédito na destino
-        return null;
     }
 
     @Transactional

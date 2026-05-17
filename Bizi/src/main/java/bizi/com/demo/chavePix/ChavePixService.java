@@ -3,6 +3,7 @@ package bizi.com.demo.chavePix;
 import bizi.com.demo.contaBancaria.ContaBancariaModel;
 import bizi.com.demo.contaBancaria.ContaBancariaRepository;
 import bizi.com.demo.contaBancaria.ContaBancariaService;
+import bizi.com.demo.usuario.UsuarioModel;
 import bizi.com.demo.usuario.UsuarioRepository;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,32 +29,35 @@ public class ChavePixService {
     private UsuarioRepository usuarioRepository;
 
     @Transactional
-    public ChavePixModel cadastrarChave(Long contaId, TipoChave tipo, String valor) {
-        // 1. Validar limite de 5 chaves usando o nome correto do campo (contaBancaria)
+    public ChavePixModel cadastrarChave(Long contaId, TipoChave tipo, UsuarioModel usuario) {
         long totalChaves = repository.countByContaBancariaId(contaId);
         if (totalChaves >= 5) {
-            throw new RuntimeException("Limite de 5 chaves atingido para esta conta.");
+            throw new RuntimeException("Limite de 5 chaves atingido.");
+        }
+
+        String valor = switch (tipo) {
+            case CPF       -> usuario.getCpf();
+            case EMAIL     -> usuario.getEmail();
+            case TELEFONE  -> usuario.getTelefone();
+            case ALEATORIA -> UUID.randomUUID().toString();
+        };
+
+        // ← Verifica se já existe essa chave para essa conta
+        boolean jaExiste = repository.existsByContaBancariaIdAndValor(contaId, valor);
+        if (jaExiste) {
+            throw new RuntimeException("Você já possui uma chave " + tipo.name() + " cadastrada.");
         }
 
         ContaBancariaModel conta = contaService.buscarPorId(contaId);
-
         ChavePixModel novaChave = new ChavePixModel();
-        
-        // CORREÇÃO: Usando o setter atualizado da Model
-        novaChave.setConta(conta); 
-        novaChave.setTipoChave(tipo.name()); 
+        novaChave.setConta(conta);
+        novaChave.setTipoChave(tipo.name());
         novaChave.setDataCadastro(LocalDateTime.now());
-
-        // 2. Lógica para Chave Aleatória
-        if (tipo == TipoChave.ALEATORIA) {
-            novaChave.setValor(UUID.randomUUID().toString());
-        } else {
-            novaChave.setValor(valor);
-        }
+        novaChave.setValor(valor);
 
         return repository.save(novaChave);
     }
-
+    
     public Long buscarIdContaPorUsuario(Long idUsuario) {
         return contaRepository.findByUsuario_Id(idUsuario)
                 .map(ContaBancariaModel::getId)
