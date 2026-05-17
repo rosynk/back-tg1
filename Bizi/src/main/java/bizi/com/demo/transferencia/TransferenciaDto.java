@@ -5,6 +5,7 @@ import java.time.LocalDateTime;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 
 public class TransferenciaDto {
@@ -28,6 +29,11 @@ public class TransferenciaDto {
     @Schema(description = "Valor da transferência", example = "250.00")
     private BigDecimal valor;
 
+    @NotBlank(message = "Tipo de transferência é obrigatório")
+    @Pattern(regexp = "^(TED|DOC)$", message = "Tipo deve ser TED ou DOC")
+    @Schema(description = "Tipo da transferência", example = "TED", allowableValues = {"TED", "DOC"})
+    private String tipoTransferencia;
+
     @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private String nomeOrigem;
 
@@ -43,21 +49,18 @@ public class TransferenciaDto {
     @Schema(accessMode = Schema.AccessMode.READ_ONLY)
     private String mensagem;
 
-    // --- CONSTRUTORES ---
+    public TransferenciaDto() {}
 
-    // Construtor Padrão (Necessário para o Jackson/Spring)
-    public TransferenciaDto() {
-    }
-
-    // Construtor Completo
-    public TransferenciaDto(Long idTransferencia, Long contaOrigem, String agenciaDestino, String numeroContaDestino, 
-                            BigDecimal valor, String nomeOrigem, String nomeDestino, LocalDateTime dataHora, 
+    public TransferenciaDto(Long idTransferencia, Long contaOrigem, String agenciaDestino,
+                            String numeroContaDestino, BigDecimal valor, String tipoTransferencia,
+                            String nomeOrigem, String nomeDestino, LocalDateTime dataHora,
                             String status, String mensagem) {
         this.idTransferencia = idTransferencia;
         this.contaOrigem = contaOrigem;
         this.agenciaDestino = agenciaDestino;
         this.numeroContaDestino = numeroContaDestino;
         this.valor = valor;
+        this.tipoTransferencia = tipoTransferencia;
         this.nomeOrigem = nomeOrigem;
         this.nomeDestino = nomeDestino;
         this.dataHora = dataHora;
@@ -66,84 +69,26 @@ public class TransferenciaDto {
     }
 
     // --- GETTERS E SETTERS ---
-
-    public Long getIdTransferencia() {
-        return idTransferencia;
-    }
-
-    public void setIdTransferencia(Long idTransferencia) {
-        this.idTransferencia = idTransferencia;
-    }
-
-    public Long getContaOrigem() {
-        return contaOrigem;
-    }
-
-    public void setContaOrigem(Long contaOrigem) {
-        this.contaOrigem = contaOrigem;
-    }
-
-    public String getAgenciaDestino() {
-        return agenciaDestino;
-    }
-
-    public void setAgenciaDestino(String agenciaDestino) {
-        this.agenciaDestino = agenciaDestino;
-    }
-
-    public String getNumeroContaDestino() {
-        return numeroContaDestino;
-    }
-
-    public void setNumeroContaDestino(String numeroContaDestino) {
-        this.numeroContaDestino = numeroContaDestino;
-    }
-
-    public BigDecimal getValor() {
-        return valor;
-    }
-
-    public void setValor(BigDecimal valor) {
-        this.valor = valor;
-    }
-
-    public String getNomeOrigem() {
-        return nomeOrigem;
-    }
-
-    public void setNomeOrigem(String nomeOrigem) {
-        this.nomeOrigem = nomeOrigem;
-    }
-
-    public String getNomeDestino() {
-        return nomeDestino;
-    }
-
-    public void setNomeDestino(String nomeDestino) {
-        this.nomeDestino = nomeDestino;
-    }
-
-    public LocalDateTime getDataHora() {
-        return dataHora;
-    }
-
-    public void setDataHora(LocalDateTime dataHora) {
-        this.dataHora = dataHora;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public String getMensagem() {
-        return mensagem;
-    }
-
-    public void setMensagem(String mensagem) {
-        this.mensagem = mensagem;
-    }
+    public Long getIdTransferencia() { return idTransferencia; }
+    public void setIdTransferencia(Long idTransferencia) { this.idTransferencia = idTransferencia; }
+    public Long getContaOrigem() { return contaOrigem; }
+    public void setContaOrigem(Long contaOrigem) { this.contaOrigem = contaOrigem; }
+    public String getAgenciaDestino() { return agenciaDestino; }
+    public void setAgenciaDestino(String agenciaDestino) { this.agenciaDestino = agenciaDestino; }
+    public String getNumeroContaDestino() { return numeroContaDestino; }
+    public void setNumeroContaDestino(String numeroContaDestino) { this.numeroContaDestino = numeroContaDestino; }
+    public BigDecimal getValor() { return valor; }
+    public void setValor(BigDecimal valor) { this.valor = valor; }
+    public String getTipoTransferencia() { return tipoTransferencia; }
+    public void setTipoTransferencia(String tipoTransferencia) { this.tipoTransferencia = tipoTransferencia; }
+    public String getNomeOrigem() { return nomeOrigem; }
+    public void setNomeOrigem(String nomeOrigem) { this.nomeOrigem = nomeOrigem; }
+    public String getNomeDestino() { return nomeDestino; }
+    public void setNomeDestino(String nomeDestino) { this.nomeDestino = nomeDestino; }
+    public LocalDateTime getDataHora() { return dataHora; }
+    public void setDataHora(LocalDateTime dataHora) { this.dataHora = dataHora; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public String getMensagem() { return mensagem; }
+    public void setMensagem(String mensagem) { this.mensagem = mensagem; }
 }
