@@ -24,9 +24,8 @@ public interface TransacaoRepository extends JpaRepository<TransacaoModel, Long>
 
     List<TransacaoModel> findByContaBancariaIdOrderByDataHoraDesc(Long idConta);
 
-    @Query("SELECT t FROM TransacaoModel t WHERE t.cpfOrigem = :cpf OR t.cpfDestino = :cpf")
+    @Query("SELECT t FROM TransacaoModel t WHERE t.contaBancaria.usuario.cpf = :cpf ORDER BY t.dataHora DESC")
     List<TransacaoModel> findByCpfParaExtrato(@Param("cpf") String cpf);
-
     // CORRIGIDO: O retorno deve ser List<TransacaoModel>
     // O Spring agora vai conseguir mapear corretamente para o seu banco
     List<TransacaoModel> findByContaBancariaIdAndDataHoraAfter(Long idConta, LocalDateTime data);
