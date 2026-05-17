@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -66,6 +67,10 @@ public class ContaBancariaService {
 
         conta.setSaldo(conta.getSaldo().add(valor));
         contaBancariaRepository.save(conta);
+    }
+    
+    public Optional<ContaBancariaModel> buscarPorAgenciaENumeroConta(String agencia, String numeroConta) {
+        return contaBancariaRepository.findByNumeroAgenciaAndNumeroConta(agencia, numeroConta);
     }
 
     @Transactional

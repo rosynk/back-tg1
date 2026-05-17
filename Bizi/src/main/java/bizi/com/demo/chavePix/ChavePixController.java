@@ -44,6 +44,25 @@ public class ChavePixController {
                     .body(new ChavePixApiResponse(false, e.getMessage(), null));
         }
     }
+    
+    @GetMapping("/buscar")
+    @Operation(summary = "Buscar titular por chave Pix", description = "Retorna dados públicos do titular para confirmação de envio.")
+    public ResponseEntity<?> buscarPorChave(@RequestParam String chave) {
+        try {
+            ChavePixModel chavePix = service.buscarPorValor(chave)
+                .orElseThrow(() -> new RuntimeException("Chave não encontrada"));
+
+            var dto = new java.util.HashMap<String, Object>();
+            dto.put("nomeCompleto", chavePix.getConta().getUsuario().getNomeCompleto());
+            dto.put("chave", chavePix.getValor());
+            dto.put("tipoChave", chavePix.getTipoChave());
+
+            return ResponseEntity.ok(dto);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new java.util.HashMap<String, String>() {{ put("mensagem", "Chave Pix não encontrada."); }});
+        }
+    }
 
     @GetMapping("/conta") // Rota completa: /api/chaves-pix/conta
     public ResponseEntity<ChavePixApiResponse> buscarDadosConta(@AuthenticationPrincipal UsuarioModel usuarioLogado) {

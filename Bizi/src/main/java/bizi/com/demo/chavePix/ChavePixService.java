@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.UUID;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class ChavePixService {
@@ -58,10 +59,8 @@ public class ChavePixService {
         return repository.save(novaChave);
     }
     
-    public Long buscarIdContaPorUsuario(Long idUsuario) {
-        return contaRepository.findByUsuario_Id(idUsuario)
-                .map(ContaBancariaModel::getId)
-                .orElse(null); // Retorna null em vez de quebrar o servidor
+    public Optional<ChavePixModel> buscarPorValor(String valor) {
+        return repository.findByValor(valor);
     }
 
     public List<ChavePixModel> listarChavesPorConta(Long contaId) {

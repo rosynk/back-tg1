@@ -99,6 +99,31 @@ public class ContaBancariaController {
                     .body(new ErrorResponse("Conta inexistente ou acesso negado."));
         }
     }
+    
+    @GetMapping("/buscar")
+    @PreAuthorize("hasAnyRole('ROLE_ADMIN', 'ROLE_CLIENTE')")
+    @Operation(summary = "Buscar conta por agência e número", description = "Retorna dados públicos do titular para confirmação de transferência.")
+    public ResponseEntity<?> buscarPorAgenciaEConta(
+            @RequestParam String agencia,
+            @RequestParam String numeroConta) {
+        try {
+            ContaBancariaModel conta = contaBancariaService
+                .buscarPorAgenciaENumeroConta(agencia, numeroConta)
+                .orElseThrow(() -> new RuntimeException("Conta não encontrada"));
+
+            // Retorna só o necessário — sem dados sensíveis
+            var dto = new java.util.HashMap<String, Object>();
+            dto.put("nomeCompleto", conta.getUsuario().getNomeCompleto());
+            dto.put("numeroAgencia", conta.getNumeroAgencia());
+            dto.put("numeroConta", conta.getNumeroConta());
+            dto.put("tipoConta", conta.getTipoConta());
+
+            return ResponseEntity.ok(dto);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ErrorResponse("Conta não encontrada."));
+        }
+    }
 
     // ==========================================
     // ÁREA ADMINISTRATIVA
