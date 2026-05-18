@@ -78,6 +78,84 @@ public class ComunicacaoService {
             System.out.println("***************************************************\n");
         }
     }
+    
+    public void enviarEmailAprovacao(String email, String nomeCompleto) {
+        boolean enviadoComSucesso = false;
+
+        try {
+            if (mailSender != null) {
+                SimpleMailMessage message = new SimpleMailMessage();
+                message.setFrom("seu-email@gmail.com");
+                message.setTo(email);
+                message.setSubject("✅ Bizi Bank — Sua conta foi aprovada!");
+                message.setText(
+                    "Olá, " + nomeCompleto + "!\n\n" +
+                    "Temos uma ótima notícia: sua conta no Bizi Bank foi APROVADA! 🎉\n\n" +
+                    "Você já pode acessar sua conta com o CPF e senha cadastrados durante a abertura.\n\n" +
+                    "Acesse agora: http://localhost:4200/login\n\n" +
+                    "Atenciosamente,\n" +
+                    "Equipe Bizi Bank\n" +
+                    "contato@bizibank.com.br"
+                );
+
+                mailSender.send(message);
+                enviadoComSucesso = true;
+                System.out.println("✅ [GMAIL] E-mail de aprovação enviado para: " + email);
+            }
+        } catch (Exception e) {
+            System.err.println("❌ [GMAIL] Falha no envio de aprovação: " + e.getMessage());
+        }
+
+        if (!enviadoComSucesso) {
+            System.out.println("\n***************************************************");
+            System.out.println("* [MODO DEV] E-MAIL DE APROVAÇÃO                 *");
+            System.out.println("* PARA: " + email);
+            System.out.println("* NOME: " + nomeCompleto);
+            System.out.println("* Conta aprovada e ativada com sucesso.          *");
+            System.out.println("***************************************************\n");
+        }
+    }
+
+    public void enviarEmailNegacao(String email, String nomeCompleto, String motivo) {
+        boolean enviadoComSucesso = false;
+
+        try {
+            if (mailSender != null) {
+                SimpleMailMessage message = new SimpleMailMessage();
+                message.setFrom("seu-email@gmail.com");
+                message.setTo(email);
+                message.setSubject("❌ Bizi Bank — Proposta não aprovada");
+                message.setText(
+                    "Olá, " + nomeCompleto + ".\n\n" +
+                    "Infelizmente, após análise, sua proposta de abertura de conta no Bizi Bank " +
+                    "não foi aprovada.\n\n" +
+                    "Motivo: " + (motivo != null && !motivo.isBlank() ? motivo : "Não informado") + "\n\n" +
+                    "Em cumprimento à LGPD, todos os seus documentos foram removidos " +
+                    "de nossa base de dados.\n\n" +
+                    "Se acredita que houve um engano ou deseja mais informações, " +
+                    "entre em contato com nosso suporte.\n\n" +
+                    "Atenciosamente,\n" +
+                    "Equipe Bizi Bank\n" +
+                    "contato@bizibank.com.br"
+                );
+
+                mailSender.send(message);
+                enviadoComSucesso = true;
+                System.out.println("✅ [GMAIL] E-mail de negação enviado para: " + email);
+            }
+        } catch (Exception e) {
+            System.err.println("❌ [GMAIL] Falha no envio de negação: " + e.getMessage());
+        }
+
+        if (!enviadoComSucesso) {
+            System.out.println("\n***************************************************");
+            System.out.println("* [MODO DEV] E-MAIL DE NEGAÇÃO                   *");
+            System.out.println("* PARA: " + email);
+            System.out.println("* NOME: " + nomeCompleto);
+            System.out.println("* MOTIVO: " + motivo);
+            System.out.println("***************************************************\n");
+        }
+    }
 
     private void exibirNoConsole(String email, String codigo) {
         System.out.println("\n***************************************************");

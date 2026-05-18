@@ -140,40 +140,40 @@ public class PropostaService {
             UsuarioModel usuario = usuarioRepository.findByCpf(proposta.getCpf())
                     .orElseThrow(() -> new RuntimeException("Usuário não encontrado para ativação"));
 
-            // 1. Ativa o usuário
             usuario.setAtivo(true);
             usuario.setUrlSelfie(proposta.getUrlSelfie());
             usuario.setUrlRgFrente(proposta.getUrlRgFrente());
             usuarioRepository.save(usuario);
 
-            // 2. ATIVAÇÃO DA CONTA (CORRIGIDO)
-            // Usamos o buscarPorUsuario, pois o ID do usuário NÃO é o mesmo ID da conta
-            ContaBancariaModel conta = contaService.buscarPorUsuario(usuario.getId()); 
-            
+            ContaBancariaModel conta = contaService.buscarPorUsuario(usuario.getId());
             if (conta != null) {
-                conta.setStatusConta(true); 
-                contaService.atualizarConta(conta); 
-                System.out.println("Conta bancária ativada com sucesso para: " + usuario.getNomeCompleto());
-            } else {
-                System.err.println("Aviso: Conta não encontrada para o usuário " + usuario.getId());
+                conta.setStatusConta(true);
+                contaService.atualizarConta(conta);
             }
 
+            // ← Dispara e-mail de aprovação
+            comunicacaoService.enviarEmailAprovacao(usuario.getEmail(), usuario.getNomeCompleto());
+
         } else if (novoStatus == StatusProposta.NEGADA) {
-            // Lógica LGPD: Exclusão de arquivos
             if (proposta.getUrlSelfie() != null) disco.excluir(proposta.getUrlSelfie());
             if (proposta.getUrlRgFrente() != null) disco.excluir(proposta.getUrlRgFrente());
-            
+
             proposta.setUrlSelfie(null);
             proposta.setUrlRgFrente(null);
+
+            // ← Busca o usuário pelo CPF para pegar nome e email
+            usuarioRepository.findByCpf(proposta.getCpf()).ifPresent(usuario ->
+                comunicacaoService.enviarEmailNegacao(
+                    usuario.getEmail(),
+                    usuario.getNomeCompleto(),
+                    observacao
+                )
+            );
         }
 
         proposta.setStatus(novoStatus);
         proposta.setObservacao(observacao);
         return propostaRepository.save(proposta);
     }
-    
-    
-    
-    
 
 }
