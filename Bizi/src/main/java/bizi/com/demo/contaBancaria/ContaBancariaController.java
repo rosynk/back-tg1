@@ -158,7 +158,7 @@ public class ContaBancariaController {
         }
     }
 
-    static class ErrorResponse {
+    public static class ErrorResponse {
         private String mensagem;
 
         public ErrorResponse(String mensagem) {
