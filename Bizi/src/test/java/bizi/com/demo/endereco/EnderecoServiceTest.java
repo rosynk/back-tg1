@@ -8,16 +8,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import static org.mockito.Mockito.mock;
-
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -25,8 +19,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import bizi.com.demo.validacoes.external.ViaCepClient;
@@ -34,8 +28,11 @@ import bizi.com.demo.validacoes.external.ViaCepClient;
 @ExtendWith(MockitoExtension.class)
 class EnderecoServiceTest {
 
-    @Mock private EnderecoRepository enderecoRepository;
-    @Mock private ViaCepClient viaCepClient;
+    @Mock
+    private EnderecoRepository enderecoRepository;
+
+    @Mock
+    private ViaCepClient viaCepClient;
 
     @InjectMocks
     private EnderecoService service;
@@ -45,21 +42,11 @@ class EnderecoServiceTest {
 
     @BeforeEach
     void setUp() {
-
-        Authentication authentication = mock(Authentication.class);
-
-        SecurityContext securityContext = mock(SecurityContext.class);
-
-        when(authentication.getAuthorities()).thenReturn(
-            (List) List.of(
-                new SimpleGrantedAuthority("ROLE_ADMIN")
-            )
-        );
-
-        when(securityContext.getAuthentication())
-                .thenReturn(authentication);
-
-        SecurityContextHolder.setContext(securityContext);
+        var authentication = new UsernamePasswordAuthenticationToken(
+                "admin",
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_ADMIN")));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
 
         endereco = new EnderecoModel();
         endereco.setId(1L);
@@ -77,6 +64,11 @@ class EnderecoServiceTest {
         viaCepOk.setLocalidade("São Paulo");
         viaCepOk.setUf("SP");
         viaCepOk.setErro(false);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     // =========================================================
@@ -100,6 +92,7 @@ class EnderecoServiceTest {
     void consultarCepExterno_deveLancarExcecaoQuandoViaCepRetornaErro() {
         ViaCepClient.ViaCepResponse erroResponse = new ViaCepClient.ViaCepResponse();
         erroResponse.setErro(true);
+
         when(viaCepClient.buscarEnderecoPorCep("00000000")).thenReturn(erroResponse);
 
         assertThatThrownBy(() -> service.consultarCepExterno("00000000"))
@@ -122,7 +115,7 @@ class EnderecoServiceTest {
     // =========================================================
 
     @Test
-    @DisplayName("criarEndereco: deve preencher campos do ViaCEP e salvar")
+    @DisplayName("criarEndereco: deve preencher dados do ViaCEP e salvar")
     void criarEndereco_devePreencherCamposDoViaCepESalvar() {
         EnderecoDto dto = new EnderecoDto();
         dto.setCep("01310100");
@@ -130,16 +123,18 @@ class EnderecoServiceTest {
         dto.setComplemento("Apto 42");
 
         when(viaCepClient.buscarEnderecoPorCep("01310100")).thenReturn(viaCepOk);
-        when(enderecoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(enderecoRepository.save(any(EnderecoModel.class))).thenAnswer(inv -> inv.getArgument(0));
 
         EnderecoModel resultado = service.criarEndereco(dto);
 
+        assertThat(resultado.getCep()).isEqualTo("01310100");
         assertThat(resultado.getRua()).isEqualTo("Avenida Paulista");
         assertThat(resultado.getBairro()).isEqualTo("Bela Vista");
         assertThat(resultado.getCidade()).isEqualTo("São Paulo");
         assertThat(resultado.getEstado()).isEqualTo("SP");
-        assertThat(resultado.getNumero()).isEqualTo("1000");
+        assertThat(resultado.getNumero()).isEqualTo(1000);
         assertThat(resultado.getComplemento()).isEqualTo("Apto 42");
+
         verify(enderecoRepository).save(any(EnderecoModel.class));
     }
 
@@ -151,6 +146,7 @@ class EnderecoServiceTest {
 
         ViaCepClient.ViaCepResponse erro = new ViaCepClient.ViaCepResponse();
         erro.setErro(true);
+
         when(viaCepClient.buscarEnderecoPorCep("00000000")).thenReturn(erro);
 
         assertThatThrownBy(() -> service.criarEndereco(dto))
@@ -189,50 +185,57 @@ class EnderecoServiceTest {
     // =========================================================
 
     @Test
-    @DisplayName("atualizarEndereco: deve atualizar número e complemento sem chamar ViaCEP quando CEP não muda")
+    @DisplayName("atualizarEndereco: deve atualizar sem consultar ViaCEP quando CEP é igual")
     void atualizarEndereco_deveAtualizarSemViaCepQuandoCepIgual() {
         EnderecoDto dto = new EnderecoDto();
-        dto.setCep("01310100"); // mesmo CEP
+        dto.setCep("01310100");
         dto.setNumero(2000);
-        dto.setComplemento("Sala 5");
+        dto.setComplemento("Bloco B");
 
         when(enderecoRepository.findById(1L)).thenReturn(Optional.of(endereco));
-        when(enderecoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(enderecoRepository.save(endereco)).thenReturn(endereco);
 
         EnderecoModel resultado = service.atualizarEndereco(1L, dto);
 
-        assertThat(resultado.getNumero()).isEqualTo("2000");
-        assertThat(resultado.getComplemento()).isEqualTo("Sala 5");
-        // CEP não mudou — ViaCEP não deve ser consultado
+        assertThat(resultado.getCep()).isEqualTo("01310100");
+        assertThat(resultado.getNumero()).isEqualTo(2000);
+        assertThat(resultado.getComplemento()).isEqualTo("Bloco B");
+
         verify(viaCepClient, never()).buscarEnderecoPorCep(any());
+        verify(enderecoRepository).save(endereco);
     }
 
     @Test
-    @DisplayName("atualizarEndereco: deve consultar ViaCEP e atualizar endereço quando CEP muda")
+    @DisplayName("atualizarEndereco: deve consultar ViaCEP quando CEP muda")
     void atualizarEndereco_deveConsultarViaCepQuandoCepMuda() {
         EnderecoDto dto = new EnderecoDto();
-        dto.setCep("20040020"); // CEP diferente
+        dto.setCep("01001000");
         dto.setNumero(500);
-        dto.setComplemento("");
+        dto.setComplemento("Casa");
 
         ViaCepClient.ViaCepResponse novoCep = new ViaCepClient.ViaCepResponse();
-        novoCep.setLogradouro("Avenida Rio Branco");
-        novoCep.setBairro("Centro");
-        novoCep.setLocalidade("Rio de Janeiro");
-        novoCep.setUf("RJ");
+        novoCep.setLogradouro("Praça da Sé");
+        novoCep.setBairro("Sé");
+        novoCep.setLocalidade("São Paulo");
+        novoCep.setUf("SP");
         novoCep.setErro(false);
 
         when(enderecoRepository.findById(1L)).thenReturn(Optional.of(endereco));
-        when(viaCepClient.buscarEnderecoPorCep("20040020")).thenReturn(novoCep);
-        when(enderecoRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(viaCepClient.buscarEnderecoPorCep("01001000")).thenReturn(novoCep);
+        when(enderecoRepository.save(endereco)).thenReturn(endereco);
 
         EnderecoModel resultado = service.atualizarEndereco(1L, dto);
 
-        assertThat(resultado.getCep()).isEqualTo("20040020");
-        assertThat(resultado.getRua()).isEqualTo("Avenida Rio Branco");
-        assertThat(resultado.getCidade()).isEqualTo("Rio de Janeiro");
-        assertThat(resultado.getEstado()).isEqualTo("RJ");
-        assertThat(resultado.getNumero()).isEqualTo("500");
+        assertThat(resultado.getCep()).isEqualTo("01001000");
+        assertThat(resultado.getRua()).isEqualTo("Praça da Sé");
+        assertThat(resultado.getBairro()).isEqualTo("Sé");
+        assertThat(resultado.getCidade()).isEqualTo("São Paulo");
+        assertThat(resultado.getEstado()).isEqualTo("SP");
+        assertThat(resultado.getNumero()).isEqualTo(500);
+        assertThat(resultado.getComplemento()).isEqualTo("Casa");
+
+        verify(viaCepClient).buscarEnderecoPorCep("01001000");
+        verify(enderecoRepository).save(endereco);
     }
 
     @Test
@@ -253,7 +256,7 @@ class EnderecoServiceTest {
     @DisplayName("atualizarEndereco: deve lançar exceção quando novo CEP é inválido")
     void atualizarEndereco_deveLancarExcecaoQuandoNovoCepInvalido() {
         EnderecoDto dto = new EnderecoDto();
-        dto.setCep("00000000"); // CEP diferente e inválido
+        dto.setCep("00000000");
 
         ViaCepClient.ViaCepResponse erro = new ViaCepClient.ViaCepResponse();
         erro.setErro(true);

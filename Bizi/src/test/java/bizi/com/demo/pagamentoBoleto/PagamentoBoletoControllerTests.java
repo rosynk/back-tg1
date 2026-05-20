@@ -1,6 +1,7 @@
 package bizi.com.demo.pagamentoBoleto;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
@@ -20,11 +21,13 @@ import org.springframework.http.ResponseEntity;
 
 import bizi.com.demo.contaBancaria.ContaBancariaModel;
 import bizi.com.demo.transacao.TransacaoModel;
+import bizi.com.demo.usuario.UsuarioModel;
 
 @ExtendWith(MockitoExtension.class)
 class PagamentoBoletoControllerTest {
 
-    @Mock private PagamentoBoletoService pagamentoBoletoService;
+    @Mock
+    private PagamentoBoletoService pagamentoBoletoService;
 
     @InjectMocks
     private PagamentoBoletoController controller;
@@ -34,8 +37,14 @@ class PagamentoBoletoControllerTest {
 
     @BeforeEach
     void setUp() {
+        UsuarioModel usuario = new UsuarioModel();
+        usuario.setId(1L);
+        usuario.setNomeCompleto("João Silva");
+        usuario.setCpf("12345678900");
+
         ContaBancariaModel conta = new ContaBancariaModel();
         conta.setId(10L);
+        conta.setUsuario(usuario);
 
         TransacaoModel transacao = new TransacaoModel();
         transacao.setId(100L);
@@ -53,8 +62,9 @@ class PagamentoBoletoControllerTest {
         pagamentoDto.setValor(new BigDecimal("150.00"));
         pagamentoDto.setNomeBeneficiario("Empresa Teste LTDA");
     }
+
     // =========================================================
-    //  POST /api/pagamentos/boleto — realizarPagamento
+    //  POST /api/pagamentos/boleto - realizarPagamento
     // =========================================================
 
     @Test
@@ -77,7 +87,10 @@ class PagamentoBoletoControllerTest {
         ResponseEntity<?> response = controller.realizarPagamento(pagamentoDto);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        var body = (PagamentoBoletoController.ErrorResponse) response.getBody();
+
+        PagamentoBoletoController.ErrorResponse body =
+                (PagamentoBoletoController.ErrorResponse) response.getBody();
+
         assertThat(body.getMensagem()).isEqualTo("Saldo insuficiente.");
     }
 
@@ -90,12 +103,16 @@ class PagamentoBoletoControllerTest {
         ResponseEntity<?> response = controller.realizarPagamento(pagamentoDto);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
-        var body = (PagamentoBoletoController.ErrorResponse) response.getBody();
+
+        PagamentoBoletoController.ErrorResponse body =
+                (PagamentoBoletoController.ErrorResponse) response.getBody();
+
         assertThat(body.getMensagem()).contains("Erro ao processar pagamento");
+        assertThat(body.getMensagem()).contains("Erro inesperado no banco de dados.");
     }
 
     // =========================================================
-    //  GET /api/pagamentos/boleto/{id} — buscarPorId
+    //  GET /api/pagamentos/boleto/{id} - buscarPorId
     // =========================================================
 
     @Test
@@ -110,20 +127,18 @@ class PagamentoBoletoControllerTest {
     }
 
     @Test
-    @DisplayName("buscarPorId: deve retornar 200 mesmo quando serviço lança PagamentoBoletoNotFoundException (bug no controller — try/catch fora do lugar)")
-    void buscarPorId_retorna200MesmoComNotFoundException() {
-        // ATENÇÃO: o try/catch no controller está DEPOIS da chamada ao service,
-        // então a exceção nunca é capturada — o teste documenta esse comportamento atual.
+    @DisplayName("buscarPorId: deve propagar exceção quando pagamento não encontrado")
+    void buscarPorId_devePropagarExcecaoQuandoNaoEncontrado() {
         when(pagamentoBoletoService.buscarPorId(999L))
                 .thenThrow(new RuntimeException("Pagamento com ID 999 não encontrado no BiziBanco."));
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> controller.buscarPorId(999L))
+        assertThatThrownBy(() -> controller.buscarPorId(999L))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("999");
     }
 
     // =========================================================
-    //  GET /api/pagamentos/boleto/conta/{idConta} — buscarPorConta
+    //  GET /api/pagamentos/boleto/conta/{idConta} - buscarPorConta
     // =========================================================
 
     @Test
@@ -135,6 +150,7 @@ class PagamentoBoletoControllerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).hasSize(1);
+        assertThat(response.getBody().get(0)).isEqualTo(pagamentoDto);
     }
 
     @Test

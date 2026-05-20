@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,8 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import bizi.com.demo.contaBancaria.ContaBancariaModel;
@@ -32,11 +32,14 @@ import bizi.com.demo.usuario.UsuarioModel;
 @ExtendWith(MockitoExtension.class)
 class PagamentoBoletoServiceTest {
 
-    @Mock private TransacaoRepository transacaoRepository;
-    @Mock private ContaBancariaRepository contaRepository;
-    @Mock private PagamentoBoletoRepository pagamentoRepository;
-    @Mock private SecurityContext securityContext;
-    @Mock private Authentication authentication;
+    @Mock
+    private TransacaoRepository transacaoRepository;
+
+    @Mock
+    private ContaBancariaRepository contaRepository;
+
+    @Mock
+    private PagamentoBoletoRepository pagamentoRepository;
 
     @InjectMocks
     private PagamentoBoletoService service;
@@ -51,6 +54,7 @@ class PagamentoBoletoServiceTest {
         usuario = new UsuarioModel();
         usuario.setId(1L);
         usuario.setEmail("cliente@email.com");
+        usuario.setNomeCompleto("Cliente Teste");
 
         conta = new ContaBancariaModel();
         conta.setId(10L);
@@ -67,34 +71,40 @@ class PagamentoBoletoServiceTest {
         pagamento.setTransacao(transacao);
         pagamento.setCodigoBarras("34191.23456 78901.234567 89012.345678 1 12340000015000");
         pagamento.setNomeBeneficiario("Empresa Teste LTDA");
+    }
 
-        // Configura o SecurityContextHolder para todos os testes que precisam de usuário logado
-        when(securityContext.getAuthentication()).thenReturn(authentication);
-        when(authentication.getName()).thenReturn("cliente@email.com");
-        SecurityContextHolder.setContext(securityContext);
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     // =========================================================
-    //  realizarPagamento (via DTO)
+    //  realizarPagamento
     // =========================================================
 
     @Test
     @DisplayName("realizarPagamento: deve delegar corretamente para pagarBoleto")
     void realizarPagamento_deveDelegarParaPagarBoleto() {
+        autenticarComo("cliente@email.com");
+
         PagamentoBoletoDto dto = new PagamentoBoletoDto(pagamento);
         dto.setCodigoBarras("34191.23456 78901.234567 89012.345678 1 12340000015000");
-        dto.setValor(new BigDecimal("150.00")); 
+        dto.setValor(new BigDecimal("150.00"));
         dto.setNomeBeneficiario("Empresa Teste LTDA");
 
         when(contaRepository.findAll()).thenReturn(List.of(conta));
-        when(transacaoRepository.save(any())).thenReturn(transacao);
-        when(pagamentoRepository.save(any())).thenReturn(pagamento);
+        when(transacaoRepository.save(any(TransacaoModel.class))).thenReturn(transacao);
+        when(pagamentoRepository.save(any(PagamentoBoletoModel.class))).thenAnswer(inv -> inv.getArgument(0));
 
         PagamentoBoletoModel resultado = service.realizarPagamento(dto);
 
         assertThat(resultado).isNotNull();
         assertThat(resultado.getCodigoBarras()).isEqualTo(dto.getCodigoBarras());
-        verify(pagamentoRepository).save(any());
+        assertThat(resultado.getNomeBeneficiario()).isEqualTo(dto.getNomeBeneficiario());
+
+        verify(contaRepository).save(conta);
+        verify(transacaoRepository).save(any(TransacaoModel.class));
+        verify(pagamentoRepository).save(any(PagamentoBoletoModel.class));
     }
 
     // =========================================================
@@ -104,51 +114,58 @@ class PagamentoBoletoServiceTest {
     @Test
     @DisplayName("pagarBoleto: deve debitar saldo da conta do usuário logado")
     void pagarBoleto_deveDebitarSaldoDaConta() {
+        autenticarComo("cliente@email.com");
+
         when(contaRepository.findAll()).thenReturn(List.of(conta));
-        when(transacaoRepository.save(any())).thenReturn(transacao);
-        when(pagamentoRepository.save(any())).thenReturn(pagamento);
+        when(transacaoRepository.save(any(TransacaoModel.class))).thenReturn(transacao);
+        when(pagamentoRepository.save(any(PagamentoBoletoModel.class))).thenReturn(pagamento);
 
         service.pagarBoleto("codigo-barras", new BigDecimal("300.00"), "Beneficiário");
 
-        assertThat(conta.getSaldo()).isEqualByComparingTo(new BigDecimal("700.00"));
+        assertThat(conta.getSaldo()).isEqualByComparingTo("700.00");
         verify(contaRepository).save(conta);
     }
 
     @Test
     @DisplayName("pagarBoleto: deve salvar transação e pagamento após débito")
     void pagarBoleto_deveSalvarTransacaoEPagamento() {
+        autenticarComo("cliente@email.com");
+
         when(contaRepository.findAll()).thenReturn(List.of(conta));
-        when(transacaoRepository.save(any())).thenReturn(transacao);
-        when(pagamentoRepository.save(any())).thenReturn(pagamento);
+        when(transacaoRepository.save(any(TransacaoModel.class))).thenReturn(transacao);
+        when(pagamentoRepository.save(any(PagamentoBoletoModel.class))).thenReturn(pagamento);
 
         PagamentoBoletoModel resultado = service.pagarBoleto(
                 "34191.23456", new BigDecimal("150.00"), "Empresa Teste LTDA");
 
-        verify(transacaoRepository).save(any());
-        verify(pagamentoRepository).save(any());
+        verify(transacaoRepository).save(any(TransacaoModel.class));
+        verify(pagamentoRepository).save(any(PagamentoBoletoModel.class));
         assertThat(resultado.getNomeBeneficiario()).isEqualTo("Empresa Teste LTDA");
-        assertThat(resultado.getCodigoBarras()).isEqualTo("34191.23456 78901.234567 89012.345678 1 12340000015000");
     }
 
     @Test
     @DisplayName("pagarBoleto: deve registrar transação com tipo PAGAMENTO_BOLETO")
     void pagarBoleto_deveRegistrarTransacaoComTipoCorreto() {
+        autenticarComo("cliente@email.com");
+
         when(contaRepository.findAll()).thenReturn(List.of(conta));
-        when(transacaoRepository.save(any())).thenAnswer(inv -> {
-            TransacaoModel t = inv.getArgument(0);
-            assertThat(t.getTipoTransacao().name()).isEqualTo("PAGAMENTO_BOLETO");
-            return transacao;
+        when(transacaoRepository.save(any(TransacaoModel.class))).thenAnswer(inv -> {
+            TransacaoModel transacaoSalva = inv.getArgument(0);
+            assertThat(transacaoSalva.getTipoTransacao().name()).isEqualTo("PAGAMENTO_BOLETO");
+            return transacaoSalva;
         });
-        when(pagamentoRepository.save(any())).thenReturn(pagamento);
+        when(pagamentoRepository.save(any(PagamentoBoletoModel.class))).thenAnswer(inv -> inv.getArgument(0));
 
         service.pagarBoleto("codigo", new BigDecimal("100.00"), "Beneficiário");
 
-        verify(transacaoRepository).save(any());
+        verify(transacaoRepository).save(any(TransacaoModel.class));
     }
 
     @Test
     @DisplayName("pagarBoleto: deve lançar exceção quando saldo insuficiente")
     void pagarBoleto_deveLancarExcecaoQuandoSaldoInsuficiente() {
+        autenticarComo("cliente@email.com");
+
         when(contaRepository.findAll()).thenReturn(List.of(conta));
 
         assertThatThrownBy(() -> service.pagarBoleto("codigo", new BigDecimal("9999.00"), "Beneficiário"))
@@ -163,7 +180,9 @@ class PagamentoBoletoServiceTest {
     @Test
     @DisplayName("pagarBoleto: deve lançar exceção quando nenhuma conta vinculada ao e-mail do usuário")
     void pagarBoleto_deveLancarExcecaoQuandoContaNaoEncontrada() {
-        when(contaRepository.findAll()).thenReturn(List.of()); // nenhuma conta
+        autenticarComo("cliente@email.com");
+
+        when(contaRepository.findAll()).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.pagarBoleto("codigo", new BigDecimal("100.00"), "Beneficiário"))
                 .isInstanceOf(RuntimeException.class)
@@ -175,6 +194,8 @@ class PagamentoBoletoServiceTest {
     @Test
     @DisplayName("pagarBoleto: deve lançar exceção quando e-mail do usuário logado não bate com nenhuma conta")
     void pagarBoleto_deveLancarExcecaoQuandoEmailNaoCorresponde() {
+        autenticarComo("cliente@email.com");
+
         UsuarioModel outroUsuario = new UsuarioModel();
         outroUsuario.setEmail("outro@email.com");
 
@@ -192,9 +213,11 @@ class PagamentoBoletoServiceTest {
     @Test
     @DisplayName("pagarBoleto: deve permitir pagamento com valor igual ao saldo exato")
     void pagarBoleto_devePermitirPagamentoComSaldoExato() {
+        autenticarComo("cliente@email.com");
+
         when(contaRepository.findAll()).thenReturn(List.of(conta));
-        when(transacaoRepository.save(any())).thenReturn(transacao);
-        when(pagamentoRepository.save(any())).thenReturn(pagamento);
+        when(transacaoRepository.save(any(TransacaoModel.class))).thenReturn(transacao);
+        when(pagamentoRepository.save(any(PagamentoBoletoModel.class))).thenReturn(pagamento);
 
         service.pagarBoleto("codigo", new BigDecimal("1000.00"), "Beneficiário");
 
@@ -214,6 +237,8 @@ class PagamentoBoletoServiceTest {
         PagamentoBoletoDto resultado = service.buscarPorId(1L);
 
         assertThat(resultado).isNotNull();
+        assertThat(resultado.getCodigoBarras()).isEqualTo(pagamento.getCodigoBarras());
+        assertThat(resultado.getNomeBeneficiario()).isEqualTo(pagamento.getNomeBeneficiario());
     }
 
     @Test
@@ -239,6 +264,7 @@ class PagamentoBoletoServiceTest {
         List<PagamentoBoletoDto> resultado = service.buscarPorConta(10L);
 
         assertThat(resultado).hasSize(1);
+        assertThat(resultado.get(0).getCodigoBarras()).isEqualTo(pagamento.getCodigoBarras());
     }
 
     @Test
@@ -268,5 +294,10 @@ class PagamentoBoletoServiceTest {
 
         assertThat(resultado).hasSize(2);
         verify(pagamentoRepository, times(1)).findByTransacao_ContaBancaria_Id(10L);
+    }
+
+    private void autenticarComo(String email) {
+        var authentication = new UsernamePasswordAuthenticationToken(email, null, List.of());
+        SecurityContextHolder.getContext().setAuthentication(authentication);
     }
 }
